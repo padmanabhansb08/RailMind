@@ -51,7 +51,16 @@ class ConnectionManager:
         try:
             await self.redis.publish(self.channel, message)
         except Exception as e:
-            logger.error(f"Error publishing to Redis: {e}")
+            logger.error(f"Error publishing to Redis: {e}. Falling back to direct connection broadcasting.")
+            failed_connections = []
+            for connection in self.active_connections:
+                try:
+                    await connection.send_text(message)
+                except Exception as ex:
+                    logger.error(f"Error sending directly to client: {ex}")
+                    failed_connections.append(connection)
+            for connection in failed_connections:
+                self.disconnect(connection)
 
     async def _listen_to_redis(self):
         while True:
