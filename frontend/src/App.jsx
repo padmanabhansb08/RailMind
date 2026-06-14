@@ -70,23 +70,6 @@ function MainApp() {
   const [trains, setTrains] = useState([]);
   const [wsStatus, setWsStatus] = useState('reconnecting');
   const [logs, setLogs] = useState([]);
-  const [agentState, setAgentState] = useState('IDLE');
-  const [commandText, setCommandText] = useState('');
-  const [commandResult, setCommandResult] = useState('');
-  const [smsLogs, setSmsLogs] = useState([]);
-  const [liveFlash, setLiveFlash] = useState(false);
-  const [cycleCountdown, setCycleCountdown] = useState(30);
-  const [secondsSinceScan, setSecondsSinceScan] = useState(0);
-  const [cascadeAlert, setCascadeAlert] = useState(null);
-  const [prediction, setPrediction] = useState(null);
-
-  // Agent Brain Real-time Thinking HUD States
-  const [perceivingText, setPerceivingText] = useState('Scanning 15 trains');
-  const [perceivingConfidence, setPerceivingConfidence] = useState('87%');
-  const [decidingText, setDecidingText] = useState('Evaluating 4 possible actions...');
-  const [decidingConfidence, setDecidingConfidence] = useState('—');
-  const [actingText, setActingText] = useState('Waiting for dispatch...');
-  const [actingStatus, setActingStatus] = useState('IDLE');
   
   // Modal Overlay States
   const [showSettings, setShowSettings] = useState(false);
@@ -119,14 +102,7 @@ function MainApp() {
   }, [incidents]);
 
   const socketRef = useRef(null);
-  const terminalEndRef = useRef(null);
   const API_BASE = `http://${window.location.hostname}:8000`;
-
-  useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs]);
 
   // Fetch functions
   const fetchIncidents = async () => {
@@ -140,7 +116,6 @@ function MainApp() {
           title: inc.incident_title || inc.summary || "Operations Anomaly",
           description: inc.situation_summary || inc.summary || "Investigating operational status.",
           timestamp: new Date(inc.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          timestamp_iso: inc.timestamp,
           incident_title: inc.incident_title || inc.summary || "Operations Anomaly",
           situation_summary: inc.situation_summary || inc.summary || "Investigating operational status.",
           reroute_plan: inc.reroute_plan || null,
@@ -151,12 +126,7 @@ function MainApp() {
           resolution_status: inc.resolution_status || 'pending',
           approved: inc.resolution_status === 'approved',
           departments: inc.departments_notified || [],
-          train_number: inc.train_number || 'Unknown',
-          confidence_score: inc.confidence_score || null,
-          reasoning_steps: inc.reasoning_steps || [],
-          passenger_impact: inc.passenger_impact || '',
-          prediction: inc.prediction || '',
-          memory_used: inc.memory_used || ''
+          train_number: inc.train_number || 'Unknown'
         }));
         setIncidents(formatted);
         setIncidentCount(formatted.length);
@@ -191,18 +161,12 @@ function MainApp() {
   };
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSecondsSinceScan(prev => prev + 1);
-      setCycleCountdown(prev => (prev > 1 ? prev - 1 : 30));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     fetchIncidents();
     fetchTrains();
     fetchTasks();
 
+    // Poll trains every 5 seconds for live position updates
+    const trainInterval = setInterval(fetchTrains, 5000);
     const wsUrl = `ws://${window.location.hostname}:8000/ws`;
     let socket;
     let reconnectTimeout;
@@ -230,7 +194,6 @@ function MainApp() {
               title: report.incident_title || report.summary || "New Incident Logged",
               description: report.situation_summary || report.summary || "Investigating operational status.",
               timestamp: new Date(report.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              timestamp_iso: report.timestamp,
               incident_title: report.incident_title || report.summary || "New Incident Logged",
               situation_summary: report.situation_summary || report.summary || "Investigating operational status.",
               reroute_plan: report.reroute_plan || null,
@@ -241,12 +204,7 @@ function MainApp() {
               resolution_status: report.resolution_status || 'pending',
               approved: report.resolution_status === 'approved',
               departments: report.departments_notified || [],
-              train_number: report.train_number || 'Unknown',
-              confidence_score: report.confidence_score || null,
-              reasoning_steps: report.reasoning_steps || [],
-              passenger_impact: report.passenger_impact || '',
-              prediction: report.prediction || '',
-              memory_used: report.memory_used || ''
+              train_number: report.train_number || 'Unknown'
             };
 
             setIncidents(prev => {
@@ -258,92 +216,10 @@ function MainApp() {
               setLoopCount(report.loop_count);
             }
 
-             if (report.passenger_sms) {
-              setSmsLogs(prev => {
-                const newLog = {
-                  to: "+919651058174 (Passenger)",
-                  body: report.passenger_sms,
-                  sid: `SMdemo_${Math.random().toString(36).substr(2, 9)}`
-                };
-                if (prev.some(l => l.body === newLog.body)) return prev;
-                return [newLog, ...prev];
-              });
-            }
-
             fetchTasks();
             fetchTrains();
           } else if (payload.type === 'AGENT_LOG') {
             setLogs(prev => [...prev, payload].slice(-200)); // Keep last 200 logs
-            
-            // Dynamically update the HUD based on actual thinking logs!
-            const node = payload.node?.toUpperCase();
-            const msg = payload.message || '';
-            
-            if (node === 'SCANNING') {
-              setPerceivingText(msg.replace('[RAILMIND] ', ''));
-              setPerceivingConfidence('87%');
-              setActingStatus('IDLE');
-            } else if (node === 'DETECTED') {
-              setPerceivingText(msg);
-            } else if (node === 'CASCADE?') {
-              setPerceivingText(msg);
-            } else if (node === 'THINKING') {
-              setDecidingText('Sending to Gemini for perception...');
-              setDecidingConfidence('—');
-            } else if (node === 'PERCEIVED') {
-              setPerceivingText(msg);
-              setPerceivingConfidence('91%');
-            } else if (node === 'DECIDING') {
-              setDecidingText(msg);
-            } else if (node === 'DECIDED') {
-              const confMatch = msg.match(/Confidence:\s*(\d+)%/i);
-              if (confMatch) {
-                setDecidingConfidence(confMatch[1] + '%');
-              } else {
-                setDecidingConfidence('94%');
-              }
-              const cleanDec = msg.replace(/Confidence:\s*\d+%\.?\s*/i, '');
-              setDecidingText(cleanDec);
-            } else if (node === 'ACTING') {
-              setActingText(msg);
-              setActingStatus('RUNNING');
-            } else if (node === 'SMS') {
-              setActingText(msg);
-              setActingStatus('RUNNING');
-            } else if (node === 'LOGGED') {
-              setActingText(msg);
-              setActingStatus('SAVING');
-            } else if (node === 'COMPLETE') {
-              setActingStatus('COMPLETE');
-            }
-          } else if (payload.type === 'AGENT_STATE_CHANGE') {
-            setAgentState(payload.state);
-          } else if (payload.type === 'CASCADE_ALERT') {
-            setCascadeAlert(payload);
-          } else if (payload.type === 'PREDICTION_UPDATE') {
-            setPrediction(payload.data);
-          } else if (payload.type === 'LOOP_UPDATE') {
-            setLoopCount(payload.loop_count);
-            setSecondsSinceScan(0);
-            setCycleCountdown(30);
-            setLiveFlash(true);
-            setTimeout(() => setLiveFlash(false), 800);
-            
-            // Reset agent brain dashboard indicators for new loop
-            setPerceivingText('Scanning 15 trains');
-            setPerceivingConfidence('87%');
-            setDecidingText('Evaluating 4 possible actions...');
-            setDecidingConfidence('—');
-            setActingText('Waiting for dispatch...');
-            setActingStatus('PENDING');
-            
-            if (payload.anomalies_found === 0) {
-              setCascadeAlert(null);
-              setPrediction(null);
-            }
-            fetchTrains();
-            fetchIncidents();
-            fetchTasks();
           }
         } catch (err) {
           console.error("[WEBSOCKET] Error parsing socket data:", err);
@@ -367,6 +243,7 @@ function MainApp() {
     return () => {
       if (socket) socket.close();
       clearTimeout(reconnectTimeout);
+      clearInterval(trainInterval);
     };
   }, []);
 
@@ -386,7 +263,7 @@ function MainApp() {
       if (res.ok) {
         setIncidents(prev => prev.map(inc => {
           if (inc.id === incidentId) {
-            return { ...inc, approved: true, resolution_status: 'approved' };
+            return { ...inc, approved: true };
           }
           return inc;
         }));
@@ -398,40 +275,6 @@ function MainApp() {
       }
     } catch (err) {
       console.error("Error approving reroute plan:", err);
-    }
-  };
-
-  const handleOverride = async (incidentId, newDecision) => {
-    console.log(`Overriding reroute plan for incident ${incidentId} with: ${newDecision}`);
-    const adminPassword = window.prompt("Enter Admin Password to execute this override plan:");
-    if (adminPassword === null) {
-      return; // User cancelled
-    }
-    try {
-      const headers = new Headers();
-      headers.set('Authorization', 'Basic ' + btoa('admin:' + adminPassword));
-      headers.set('Content-Type', 'application/json');
-      const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/override`, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({ decision: newDecision })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setIncidents(prev => prev.map(inc => {
-          if (inc.id === incidentId) {
-            return { ...inc, approved: true, resolution_status: 'approved', reroute_plan: data.decision };
-          }
-          return inc;
-        }));
-      } else if (res.status === 401) {
-        alert("Incorrect admin password.");
-        console.error("Unauthorized: Incorrect admin password.");
-      } else {
-        console.error("Failed to override incident decision on backend");
-      }
-    } catch (err) {
-      console.error("Error overriding incident decision:", err);
     }
   };
 
@@ -466,8 +309,6 @@ function MainApp() {
   const IncidentFeedView = () => {
     const [filter, setFilter] = useState('ALL');
     const [expandedIncident, setExpandedIncident] = useState(null);
-    const [activeOverrideId, setActiveOverrideId] = useState(null);
-    const [overrideText, setOverrideText] = useState("");
 
     const filteredIncidents = incidents.filter(inc => {
       if (filter === 'ALL') return true;
@@ -567,105 +408,24 @@ function MainApp() {
                             <Check size={12} /> APPROVED
                           </span>
                         ) : (
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              onClick={() => handleApprove(inc.id)}
-                              className="palantir-mono"
-                              style={{
-                                backgroundColor: '#00f0ff',
-                                color: '#080a0d',
-                                border: 'none',
-                                borderRadius: '0px',
-                                padding: '4px 10px',
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              APPROVE
-                            </button>
-                            <button
-                              onClick={() => {
-                                setActiveOverrideId(inc.id);
-                                setOverrideText(inc.reroute_plan || "");
-                              }}
-                              className="palantir-mono"
-                              style={{
-                                backgroundColor: '#ffb300',
-                                color: '#080a0d',
-                                border: 'none',
-                                borderRadius: '0px',
-                                padding: '4px 10px',
-                                fontSize: '10px',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              OVERRIDE
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleApprove(inc.id)}
+                            className="palantir-mono"
+                            style={{
+                              backgroundColor: '#00f0ff',
+                              color: '#080a0d',
+                              border: 'none',
+                              borderRadius: '0px',
+                              padding: '4px 10px',
+                              fontSize: '10px',
+                              fontWeight: 700,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            APPROVE
+                          </button>
                         )}
                       </div>
-                      
-                      {activeOverrideId === inc.id && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '10px' }}>
-                          <input
-                            type="text"
-                            value={overrideText}
-                            onChange={(e) => setOverrideText(e.target.value)}
-                            placeholder="Type different decision..."
-                            style={{
-                              backgroundColor: '#05070a',
-                              border: '1px solid #ffb300',
-                              color: '#cbd5e1',
-                              fontSize: '10px',
-                              padding: '6px',
-                              fontFamily: 'inherit',
-                              outline: 'none',
-                              borderRadius: '0px'
-                            }}
-                          />
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                            <button
-                              onClick={() => {
-                                setActiveOverrideId(null);
-                                setOverrideText("");
-                              }}
-                              style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#ff3366',
-                                color: '#ffffff',
-                                border: 'none',
-                                fontSize: '9px',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              CANCEL
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (overrideText.trim()) {
-                                  handleOverride(inc.id, overrideText);
-                                  setActiveOverrideId(null);
-                                  setOverrideText("");
-                                }
-                              }}
-                              style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#00e676',
-                                color: '#080a0d',
-                                border: 'none',
-                                fontSize: '9px',
-                                fontWeight: 700,
-                                cursor: 'pointer'
-                              }}
-                            >
-                              SUBMIT
-                            </button>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -719,15 +479,6 @@ function MainApp() {
     const totalCount = incidents.length;
 
     const maxCount = Math.max(criticalCount, warningCount, infoCount, 1);
-    
-    // Compute average AI confidence score from actual incidents
-    const incidentsWithScore = incidents.filter(i => i.confidence_score);
-    const avgConfidence = incidentsWithScore.length > 0
-      ? (incidentsWithScore.reduce((s, i) => s + i.confidence_score, 0) / incidentsWithScore.length).toFixed(1)
-      : '—';
-    
-    // MTTR: approximate based on agent loop count and incident count (heuristic for demo)
-    const mttr = totalCount > 0 ? (loopCount > 0 ? (loopCount * 30 / totalCount / 60).toFixed(1) : '4.2') : '0';
 
     return (
       <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -737,13 +488,12 @@ function MainApp() {
         </div>
 
         {/* Stats Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
           {[
             { label: 'TOTAL INCIDENTS', val: totalCount, color: '#00f0ff' },
             { label: 'CRITICAL ALERTS', val: criticalCount, color: '#ff3366' },
             { label: 'AGENT COGNITIVE LOOPS', val: loopCount, color: '#00e676' },
-            { label: 'MTTR (MINUTES)', val: `${mttr} min`, color: '#cbd5e1' },
-            { label: 'AVG AI CONFIDENCE', val: avgConfidence !== '—' ? `${avgConfidence}%` : avgConfidence, color: '#ffb300' }
+            { label: 'AVG ANOMALY RESOLUTION', val: '4.2 min', color: '#cbd5e1' }
           ].map((stat, idx) => (
             <div key={idx} style={{
               backgroundColor: '#0d1117',
@@ -933,31 +683,13 @@ function MainApp() {
               [SYSTEM] Awaiting live logs from operations agent stream...
             </div>
           ) : (
-            logs.map((log, idx) => {
-              const levelColor = 
-                log.level === 'error' ? '#ff3366' :
-                log.level === 'warning' ? '#ffb300' :
-                log.level === 'success' ? '#00e676' :
-                '#00f0ff'; // info
-              
-              if (log.message && !log.node) {
-                return (
-                  <div key={idx} style={{ lineBreak: 'anywhere', color: '#e2e8f0' }}>
-                    {log.message}
-                  </div>
-                );
-              }
-
-              const showLevel = log.level && log.level.trim() !== "";
-              return (
-                <div key={idx} style={{ display: 'flex', gap: '8px', fontFamily: "'JetBrains Mono', monospace", fontSize: '11px', lineBreak: 'anywhere', paddingBottom: '2px' }}>
-                  <span style={{ color: '#5c7080', flexShrink: 0 }}>[{log.timestamp}]</span>
-                  <span style={{ color: '#00f0ff', fontWeight: 600, flexShrink: 0 }}>[{log.node?.toUpperCase()}]</span>
-                  {showLevel && <span style={{ color: levelColor, fontWeight: 700, flexShrink: 0 }}>[{log.level?.toUpperCase()}]</span>}
-                  <span style={{ color: '#cbd5e1' }}>{log.message}</span>
-                </div>
-              );
-            })
+            logs.map((log, idx) => (
+              <div key={idx} style={{ lineBreak: 'anywhere' }}>
+                <span style={{ color: '#ffb300' }}>{log.message.substring(0, 21)}</span>
+                <span style={{ color: '#00f0ff' }}>{log.message.substring(21, 35)}</span>
+                <span style={{ color: '#e2e8f0' }}>{log.message.substring(35)}</span>
+              </div>
+            ))
           )}
           <div ref={logEndRef}></div>
         </div>
@@ -968,7 +700,6 @@ function MainApp() {
   const TelemetryView = () => {
     const [telemetry, setTelemetry] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [nextRefresh, setNextRefresh] = useState(10);
 
     const fetchTelemetry = async () => {
       try {
@@ -976,7 +707,6 @@ function MainApp() {
         if (res.ok) {
           const data = await res.json();
           setTelemetry(data);
-          setNextRefresh(10);
         }
       } catch (err) {
         console.error("Failed to fetch telemetry:", err);
@@ -987,15 +717,8 @@ function MainApp() {
 
     useEffect(() => {
       fetchTelemetry();
-      const fetchInterval = setInterval(fetchTelemetry, 10000);
-      const countdownInterval = setInterval(() => {
-        setNextRefresh(prev => (prev > 0 ? prev - 1 : 10));
-      }, 1000);
-
-      return () => {
-        clearInterval(fetchInterval);
-        clearInterval(countdownInterval);
-      };
+      const interval = setInterval(fetchTelemetry, 5000);
+      return () => clearInterval(interval);
     }, []);
 
     if (loading && !telemetry) {
@@ -1013,15 +736,10 @@ function MainApp() {
     ];
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Metrics & Sensor Data</h2>
-            <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Real-time Hardware & Multi-agent State Data</p>
-          </div>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#00f0ff', border: '1px solid rgba(0, 240, 255, 0.2)', padding: '4px 8px' }}>
-            REFRESH IN: {nextRefresh}S
-          </span>
+      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div>
+          <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Metrics & Sensor Data</h2>
+          <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Real-time Hardware & Multi-agent State Data</p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
@@ -1047,7 +765,6 @@ function MainApp() {
   const SchedulesView = () => {
     const [scheduleTrains, setScheduleTrains] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [nextRefresh, setNextRefresh] = useState(30);
 
     const fetchSchedules = async () => {
       try {
@@ -1055,7 +772,6 @@ function MainApp() {
         if (res.ok) {
           const data = await res.json();
           setScheduleTrains(data);
-          setNextRefresh(30);
         }
       } catch (err) {
         console.error("Failed to fetch schedules:", err);
@@ -1066,15 +782,8 @@ function MainApp() {
 
     useEffect(() => {
       fetchSchedules();
-      const fetchInterval = setInterval(fetchSchedules, 30000);
-      const countdownInterval = setInterval(() => {
-        setNextRefresh(prev => (prev > 0 ? prev - 1 : 30));
-      }, 1000);
-
-      return () => {
-        clearInterval(fetchInterval);
-        clearInterval(countdownInterval);
-      };
+      const interval = setInterval(fetchSchedules, 30000);
+      return () => clearInterval(interval);
     }, []);
 
     if (loading && scheduleTrains.length === 0) {
@@ -1082,15 +791,10 @@ function MainApp() {
     }
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>Rail Network Timetable</h2>
-            <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Live Route Timetables Feed</p>
-          </div>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#ffb300', border: '1px solid rgba(255, 179, 0, 0.2)', padding: '4px 8px' }}>
-            AUTO-REFRESH IN: {nextRefresh}S
-          </span>
+      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div>
+          <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>Rail Network Timetable</h2>
+          <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Auto-refresh Interval [30s]</p>
         </div>
 
         <div style={{
@@ -1143,7 +847,6 @@ function MainApp() {
   const AssetsView = () => {
     const [status, setStatus] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [nextRefresh, setNextRefresh] = useState(15);
 
     const fetchStatus = async () => {
       try {
@@ -1151,7 +854,6 @@ function MainApp() {
         if (res.ok) {
           const data = await res.json();
           setStatus(data);
-          setNextRefresh(15);
         }
       } catch (err) {
         console.error("Failed to fetch system status:", err);
@@ -1162,15 +864,6 @@ function MainApp() {
 
     useEffect(() => {
       fetchStatus();
-      const fetchInterval = setInterval(fetchStatus, 15000);
-      const countdownInterval = setInterval(() => {
-        setNextRefresh(prev => (prev > 0 ? prev - 1 : 15));
-      }, 1000);
-
-      return () => {
-        clearInterval(fetchInterval);
-        clearInterval(countdownInterval);
-      };
     }, []);
 
     if (loading && !status) {
@@ -1186,15 +879,10 @@ function MainApp() {
     ];
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Registry & Fleet</h2>
-            <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Node Networks & Fleet Status</p>
-          </div>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#00e676', border: '1px solid rgba(0, 230, 118, 0.2)', padding: '4px 8px' }}>
-            HEARTBEAT IN: {nextRefresh}S
-          </span>
+      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div>
+          <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Registry & Fleet</h2>
+          <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>Node Networks & Fleet Status</p>
         </div>
 
         {/* Connection Cards */}
@@ -1202,13 +890,12 @@ function MainApp() {
           {services.map((s, idx) => (
             <div key={idx} style={{
               backgroundColor: '#0d1117',
-              border: `1px solid ${s.isConnected ? '#00e67633' : '#ff336633'}`,
+              border: '1px solid #1a2433',
               borderRadius: '0px',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '12px',
-              boxShadow: s.isConnected ? '0 0 10px rgba(0, 230, 118, 0.03)' : '0 0 10px rgba(255, 51, 102, 0.03)'
+              gap: '12px'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="palantir-mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>{s.name}</span>
@@ -1256,29 +943,270 @@ function MainApp() {
     );
   };
 
-  const handleCommandSubmit = async (e) => {
-    e.preventDefault();
-    if (!commandText.trim()) return;
-    setCommandResult("Executing operational instruction...");
-    try {
-      const res = await fetch(`${API_BASE}/api/agent-command`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: commandText })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setCommandResult(data.response);
-        if (data.log) {
-          setLogs(prev => [...prev, { message: `[${new Date().toLocaleTimeString()}] ${data.log}` }].slice(-200));
+  const SimulationView = () => {
+    const [selectedTrain, setSelectedTrain] = useState(trains[0]?.train_number || '12301');
+    const [delayMinutes, setDelayMinutes] = useState(60);
+    const [status, setStatus] = useState('Delayed');
+    const [currentStation, setCurrentStation] = useState('Kanpur Central');
+    const [isInjected, setIsInjected] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+
+    const handleInject = async () => {
+      setIsInjected(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/simulate-anomaly`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            train_number: selectedTrain,
+            delay_minutes: parseInt(delayMinutes),
+            status: status,
+            current_station: currentStation
+          })
+        });
+        if (res.ok) {
+          console.log("[SIMULATION] Anomaly successfully injected.");
+          setTimeout(() => {
+            fetchTrains();
+            fetchIncidents();
+            fetchTasks();
+          }, 3000);
         }
-        setCommandText('');
-      } else {
-        setCommandResult("Error: Failed to process command.");
+      } catch (err) {
+        console.error("Failed to inject anomaly:", err);
+      } finally {
+        setTimeout(() => setIsInjected(false), 2000);
       }
-    } catch (err) {
-      setCommandResult("Error: Connection lost.");
-    }
+    };
+
+    const handleReset = async () => {
+      setIsResetting(true);
+      try {
+        const res = await fetch(`${API_BASE}/api/reset-simulation`, {
+          method: 'POST'
+        });
+        if (res.ok) {
+          console.log("[SIMULATION] Simulation registry reset.");
+          setTimeout(() => {
+            fetchTrains();
+            fetchIncidents();
+            fetchTasks();
+          }, 3000);
+        }
+      } catch (err) {
+        console.error("Failed to reset simulation:", err);
+      } finally {
+        setTimeout(() => setIsResetting(false), 2000);
+      }
+    };
+
+    return (
+      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div>
+          <h2 className="palantir-mono" style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>ANOMALY SIMULATION COMMAND</h2>
+          <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>INJECT TELEMETRY OVERRIDES AND TEST AGENT COGNITION</p>
+        </div>
+
+        <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+          <div style={{
+            flex: 2,
+            minWidth: '360px',
+            backgroundColor: '#0d1117',
+            border: '1px solid #1a2433',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px'
+          }}>
+            <h3 className="palantir-mono" style={{ fontSize: '13px', fontWeight: 600, color: '#00f0ff', borderBottom: '1px solid #1a2433', paddingBottom: '10px' }}>
+              INJECTION CONFIGURATION
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label className="palantir-mono" style={{ fontSize: '10px', color: '#8a9ba8', fontWeight: 600 }}>SELECT CORRIDOR TRAIN</label>
+                <select
+                  value={selectedTrain}
+                  onChange={(e) => setSelectedTrain(e.target.value)}
+                  className="palantir-mono"
+                  style={{
+                    backgroundColor: '#121820',
+                    border: '1px solid #1a2433',
+                    color: '#f8fafc',
+                    padding: '10px',
+                    fontSize: '11px',
+                    outline: 'none',
+                    borderRadius: '0px',
+                    width: '100%'
+                  }}
+                >
+                  {trains.map(t => (
+                    <option key={t.train_number} value={t.train_number}>
+                      {t.train_number} - {t.train_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label className="palantir-mono" style={{ fontSize: '10px', color: '#8a9ba8', fontWeight: 600 }}>ANOMALY TYPE / STATUS</label>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="palantir-mono"
+                  style={{
+                    backgroundColor: '#121820',
+                    border: '1px solid #1a2433',
+                    color: '#f8fafc',
+                    padding: '10px',
+                    fontSize: '11px',
+                    outline: 'none',
+                    borderRadius: '0px',
+                    width: '100%'
+                  }}
+                >
+                  <option value="Delayed">Delayed</option>
+                  <option value="Cancelled">Cancelled</option>
+                  <option value="Overcrowded">Overcrowded</option>
+                  <option value="On Time">Nominal / On Time</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label className="palantir-mono" style={{ fontSize: '10px', color: '#8a9ba8', fontWeight: 600 }}>DELAY OFFSET (MINUTES)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="480"
+                  value={delayMinutes}
+                  onChange={(e) => setDelayMinutes(e.target.value)}
+                  className="palantir-mono"
+                  style={{
+                    backgroundColor: '#121820',
+                    border: '1px solid #1a2433',
+                    color: '#f8fafc',
+                    padding: '10px',
+                    fontSize: '11px',
+                    outline: 'none',
+                    borderRadius: '0px',
+                    width: '100%'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <label className="palantir-mono" style={{ fontSize: '10px', color: '#8a9ba8', fontWeight: 600 }}>STATION OVERRIDE COORDINATE</label>
+                <input
+                  type="text"
+                  value={currentStation}
+                  onChange={(e) => setCurrentStation(e.target.value)}
+                  className="palantir-mono"
+                  style={{
+                    backgroundColor: '#121820',
+                    border: '1px solid #1a2433',
+                    color: '#f8fafc',
+                    padding: '10px',
+                    fontSize: '11px',
+                    outline: 'none',
+                    borderRadius: '0px',
+                    width: '100%'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+              <button
+                onClick={handleInject}
+                disabled={isInjected}
+                className="palantir-mono"
+                style={{
+                  flex: 1,
+                  padding: '12px 20px',
+                  backgroundColor: '#ff3366',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '0px',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  boxShadow: '0 0 10px rgba(255, 51, 102, 0.2)',
+                  transition: 'opacity 0.2s',
+                  opacity: isInjected ? 0.7 : 1
+                }}
+              >
+                {isInjected ? "INJECTING ALARM..." : "TRIGGER ANOMALY INJECTION"}
+              </button>
+
+              <button
+                onClick={handleReset}
+                disabled={isResetting}
+                className="palantir-mono"
+                style={{
+                  padding: '12px 20px',
+                  backgroundColor: 'transparent',
+                  color: '#8a9ba8',
+                  border: '1px solid #1a2433',
+                  borderRadius: '0px',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = '#00f0ff';
+                  e.currentTarget.style.color = '#e2e8f0';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = '#1a2433';
+                  e.currentTarget.style.color = '#8a9ba8';
+                }}
+              >
+                {isResetting ? "RESETTING..." : "RESET ALL OVERRIDES"}
+              </button>
+            </div>
+          </div>
+
+          <div style={{
+            flex: 1,
+            minWidth: '280px',
+            backgroundColor: '#0d1117',
+            border: '1px dashed #1a2433',
+            padding: '24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}>
+            <h3 className="palantir-mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>
+              HOW THE PIPELINE RESPONDS
+            </h3>
+            
+            <div className="palantir-mono" style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '11px', color: '#8a9ba8' }}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ color: '#00f0ff', fontWeight: 700 }}>1.</span>
+                <span>Telemetry data is overridden with the custom coordinates and delays.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ color: '#00f0ff', fontWeight: 700 }}>2.</span>
+                <span>The **Detect Node** classifies the state and logs the anomaly severity.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ color: '#00f0ff', fontWeight: 700 }}>3.</span>
+                <span>The **Reason Node** uses Gemini/Claude to formulate mitigation plans.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ color: '#00f0ff', fontWeight: 700 }}>4.</span>
+                <span>**Dijkstra Detours** calculates emergency bypass routes.</span>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <span style={{ color: '#00f0ff', fontWeight: 700 }}>5.</span>
+                <span>**Coordination Agents** dispatch tasks to all operational desks.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const renderContent = () => {
@@ -1293,424 +1221,14 @@ function MainApp() {
               borderRight: '1px solid #1a2433',
               backgroundColor: '#080a0d'
             }}>
-              <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ flex: 1, position: 'relative' }}>
-                  <LiveMap trains={trains} incidents={incidents} />
-                  
-                  {/* Floating Predictive Intelligence Panel Overlay */}
-                  {prediction && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '16px',
-                      right: '16px',
-                      zIndex: 1000,
-                      width: '320px',
-                      backgroundColor: 'rgba(13, 17, 23, 0.92)',
-                      border: '1px solid rgba(0, 240, 255, 0.3)',
-                      borderRadius: '0px',
-                      padding: '14px',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-                      backdropFilter: 'blur(4px)',
-                      fontFamily: "'JetBrains Mono', monospace"
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px', borderBottom: '1px solid #1a2433', paddingBottom: '4px' }}>
-                        <ShieldAlert size={14} style={{ color: '#00f0ff' }} />
-                        <h4 style={{ margin: 0, fontSize: '9px', fontWeight: 700, color: '#00f0ff', letterSpacing: '1px' }}>
-                          RAILMIND PREDICTIVE INTELLIGENCE (30M)
-                        </h4>
-                      </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '9px' }}>
-                        <div>
-                          <span style={{ color: '#ffb300', fontWeight: 700 }}>AT-RISK SERVICES: </span>
-                          <span style={{ color: '#e2e8f0' }}>{prediction.at_risk_trains?.join(', ') || 'None'}</span>
-                        </div>
-                        <div>
-                          <span style={{ color: '#ff3366', fontWeight: 700 }}>CONGESTION SPOTS: </span>
-                          <span style={{ color: '#e2e8f0' }}>{prediction.congestion_stations?.join(', ') || 'None'}</span>
-                        </div>
-                        <div>
-                          <span style={{ color: '#90a4ae', fontWeight: 700 }}>WORST CASE SCENARIO: </span>
-                          <p style={{ margin: '2px 0 0 0', color: '#cbd5e1', lineHeight: '1.3' }}>{prediction.worst_case}</p>
-                        </div>
-                        <div>
-                          <span style={{ color: '#00e676', fontWeight: 700 }}>PREEMPTIVE ACTIONS: </span>
-                          <ul style={{ margin: '4px 0 0 0', paddingLeft: '14px', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            {prediction.preemptive_actions?.map((act, i) => (
-                              <li key={i}>{act}</li>
-                            ))}
-                          </ul>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', borderTop: '1px solid #1a2433', paddingTop: '4px' }}>
-                          <span style={{ color: '#5c7080' }}>CONFIDENCE:</span>
-                          <span style={{ color: '#00f0ff', fontWeight: 700 }}>{((prediction.confidence || 0.9) * 100).toFixed(0)}% CERTITUDE</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Floating AI Command Terminal Overlay */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '16px',
-                    left: '16px',
-                    zIndex: 1000,
-                    width: '320px',
-                    backgroundColor: 'rgba(13, 17, 23, 0.92)',
-                    border: '1px solid #1a2433',
-                    borderRadius: '0px',
-                    padding: '14px',
-                    boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
-                    backdropFilter: 'blur(4px)',
-                    fontFamily: "'JetBrains Mono', monospace"
-                  }}>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '9px', fontWeight: 700, color: '#00f0ff', letterSpacing: '1px' }}>
-                      RAILMIND COGNITIVE TERMINAL
-                    </h4>
-                    <form onSubmit={handleCommandSubmit} style={{ display: 'flex', gap: '8px' }}>
-                      <input
-                        type="text"
-                        value={commandText}
-                        onChange={(e) => setCommandText(e.target.value)}
-                        placeholder="Ask RailMind agent (e.g. bypass CNB)..."
-                        style={{
-                          flex: 1,
-                          backgroundColor: '#05070a',
-                          border: '1px solid #1a2433',
-                          color: '#cbd5e1',
-                          fontSize: '10px',
-                          padding: '6px 8px',
-                          fontFamily: 'inherit',
-                          outline: 'none',
-                          borderRadius: '0px'
-                        }}
-                      />
-                      <button
-                        type="submit"
-                        style={{
-                          backgroundColor: '#00f0ff',
-                          color: '#080a0d',
-                          border: 'none',
-                          fontSize: '9px',
-                          fontWeight: 700,
-                          padding: '6px 12px',
-                          cursor: 'pointer',
-                          borderRadius: '0px'
-                        }}
-                      >
-                        EXECUTE
-                      </button>
-                    </form>
-                    {commandResult && (
-                      <div style={{
-                        marginTop: '8px',
-                        padding: '8px',
-                        backgroundColor: 'rgba(0, 240, 255, 0.03)',
-                        border: '1px dashed rgba(0, 240, 255, 0.2)',
-                        fontSize: '9px',
-                        color: '#00f0ff',
-                        lineHeight: '1.4',
-                        maxHeight: '80px',
-                        overflowY: 'auto'
-                      }}>
-                        {commandResult}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                {/* Last Scanned Status Bar */}
-                <div className="palantir-mono" style={{
-                  height: '24px',
-                  backgroundColor: '#0a0d14',
-                  borderTop: '1px solid #1a2433',
-                  display: 'flex',
-                  alignItems: 'center',
-                  padding: '0 16px',
-                  fontSize: '10px',
-                  color: '#8a9ba8',
-                  gap: '12px',
-                  zIndex: 99
-                }}>
-                  <span style={{ display: 'inline-block', width: '6px', height: '6px', backgroundColor: '#00e676', borderRadius: '50%' }}></span>
-                  <span>Agent loop status: <strong style={{ color: '#00e676' }}>ACTIVE</strong></span>
-                  <span style={{ color: '#1a2433' }}>|</span>
-                  <span>Last scanned: <strong style={{ color: '#00f0ff' }}>{secondsSinceScan} seconds ago</strong></span>
-                  <span style={{ color: '#1a2433' }}>|</span>
-                  <span>Active Monitored Corridors: <strong style={{ color: '#cbd5e1' }}>15 Corridors (Indian Railways Mainlines)</strong></span>
-                </div>
-
-                {/* AGENT BRAIN — LIVE REASONING SECTION */}
-                {(() => {
-                  const isPerceivingActive = ['evaluate_previous_action', 'ingest_node', 'detect_node', 'SCANNING', 'DETECTED', 'CASCADE?'].includes(agentState);
-                  const isDecidingActive = ['predict_node', 'reason_node', 'THINKING', 'PERCEIVED', 'DECIDING', 'DECIDED', 'PREDICTING'].includes(agentState);
-                  const isActingActive = ['reroute_node', 'coordination_node', 'alert_node', 'report_node', 'ACTING', 'SMS', 'LOGGED', 'COMPLETE'].includes(agentState);
-
-                  return (
-                    <div style={{
-                      padding: '16px',
-                      backgroundColor: '#0a0d14',
-                      borderTop: '1px solid #1a2433',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '12px'
-                    }}>
-                      <div className="palantir-mono" style={{ fontSize: '11px', fontWeight: 700, color: '#5c7080', letterSpacing: '1.5px' }}>
-                        AGENT BRAIN — LIVE REASONING
-                      </div>
-                      
-                      {/* 3 Columns Grid */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
-                        
-                        {/* PERCEIVING Column */}
-                        <div className={`palantir-mono ${isPerceivingActive ? 'pulse-perceive' : ''}`} style={{
-                          backgroundColor: '#121820',
-                          border: '1px solid #1a2433',
-                          padding: '14px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          borderRadius: '0px',
-                          transition: 'border-color 0.3s, box-shadow 0.3s'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: isPerceivingActive ? '#00f0ff' : '#8a9ba8' }}>
-                              PERCEIVING
-                            </span>
-                            {isPerceivingActive && (
-                              <span style={{ width: '6px', height: '6px', backgroundColor: '#00f0ff', borderRadius: '50%', boxShadow: '0 0 6px #00f0ff' }}></span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#cbd5e1', minHeight: '34px', lineHeight: '1.4' }}>
-                            "{perceivingText}"
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#5c7080', borderTop: '1px solid #1a2433', paddingTop: '6px' }}>
-                            Confidence: <strong style={{ color: '#00f0ff' }}>{perceivingConfidence}</strong>
-                          </div>
-                        </div>
-
-                        {/* DECIDING Column */}
-                        <div className={`palantir-mono ${isDecidingActive ? 'pulse-decide' : ''}`} style={{
-                          backgroundColor: '#121820',
-                          border: '1px solid #1a2433',
-                          padding: '14px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          borderRadius: '0px',
-                          transition: 'border-color 0.3s, box-shadow 0.3s'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: isDecidingActive ? '#ffb300' : '#8a9ba8' }}>
-                              DECIDING
-                            </span>
-                            {isDecidingActive && (
-                              <span style={{ width: '6px', height: '6px', backgroundColor: '#ffb300', borderRadius: '50%', boxShadow: '0 0 6px #ffb300' }}></span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#cbd5e1', minHeight: '34px', lineHeight: '1.4' }}>
-                            "{decidingText}"
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#5c7080', borderTop: '1px solid #1a2433', paddingTop: '6px' }}>
-                            Confidence: <strong style={{ color: '#ffb300' }}>{decidingConfidence}</strong>
-                          </div>
-                        </div>
-
-                        {/* ACTING Column */}
-                        <div className={`palantir-mono ${isActingActive ? 'pulse-act' : ''}`} style={{
-                          backgroundColor: '#121820',
-                          border: '1px solid #1a2433',
-                          padding: '14px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          borderRadius: '0px',
-                          transition: 'border-color 0.3s, box-shadow 0.3s'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: isActingActive ? '#00e676' : '#8a9ba8' }}>
-                              ACTING
-                            </span>
-                            {isActingActive && (
-                              <span style={{ width: '6px', height: '6px', backgroundColor: '#00e676', borderRadius: '50%', boxShadow: '0 0 6px #00e676' }}></span>
-                            )}
-                          </div>
-                          <div style={{ fontSize: '11px', color: '#cbd5e1', minHeight: '34px', lineHeight: '1.4' }}>
-                            "{actingText}"
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#5c7080', borderTop: '1px solid #1a2433', paddingTop: '6px' }}>
-                            Status: <strong style={{ color: actingStatus === 'COMPLETE' ? '#00e676' : actingStatus === 'RUNNING' ? '#ffb300' : '#cbd5e1' }}>{actingStatus}</strong>
-                          </div>
-                        </div>
-
-                      </div>
-
-                      {/* Prediction Panel below the 3 columns */}
-                      <div className="palantir-mono" style={{
-                        backgroundColor: 'rgba(255, 51, 102, 0.05)',
-                        border: '1px solid rgba(255, 51, 102, 0.2)',
-                        padding: '10px 14px',
-                        fontSize: '10px',
-                        color: '#e2e8f0',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '4px'
-                      }}>
-                        <div style={{ fontWeight: 700, color: '#ff3366', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <ShieldAlert size={12} /> PREDICTION PANEL
-                        </div>
-                        <div>
-                          {prediction ? (
-                            <span>
-                              In the next 30 minutes: <strong>{prediction.at_risk_trains?.length || 3} trains at risk</strong> of delay cascade on <strong>{prediction.congestion_stations?.slice(0, 2).join('-') || 'Delhi-Howrah'}</strong> corridor. Preemptive alerts dispatched to <strong>{prediction.congestion_stations?.slice(-2).join(' and ') || 'Allahabad and Kanpur'}</strong> stations.
-                            </span>
-                          ) : (
-                            <span>
-                              In the next 30 minutes: 3 trains at risk of delay cascade on Delhi-Howrah corridor. Preemptive alerts dispatched to Allahabad and Kanpur stations.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                    </div>
-                  );
-                })()}
-
-                {/* Live scrollable Terminal Widget */}
-                <div style={{
-                  height: '140px',
-                  backgroundColor: '#05070a',
-                  borderTop: '1px solid #1a2433',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden'
-                }}>
-                  {/* Terminal Header */}
-                  <div style={{
-                    height: '24px',
-                    backgroundColor: '#0d1117',
-                    borderBottom: '1px solid #1a2433',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '0 16px',
-                    fontSize: '9px',
-                    fontWeight: 700,
-                    color: '#5c7080',
-                    letterSpacing: '1px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ display: 'inline-block', width: '8px', height: '8px', backgroundColor: '#00f0ff', borderRadius: '50%', animation: 'pulse-live 1s infinite' }}></span>
-                      <span>COGNITIVE AGENT STREAM TERMINAL</span>
-                    </div>
-                    <span>LOGSTREAM // SECURE_NODE_ALPHA</span>
-                  </div>
-
-                  {/* Terminal Body */}
-                  <div style={{
-                    flex: 1,
-                    padding: '10px 16px',
-                    overflowY: 'auto',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '10px',
-                    boxShadow: 'inset 0 2px 8px rgba(0,0,0,0.8)'
-                  }}>
-                    {logs.length === 0 ? (
-                      <div style={{ color: '#5c7080', fontStyle: 'italic' }}>
-                        [SYSTEM] Awaiting live logs from operations agent stream...
-                      </div>
-                    ) : (
-                      logs.map((log, idx) => {
-                        const levelColor = 
-                          log.level === 'error' ? '#ff3366' :
-                          log.level === 'warning' ? '#ffb300' :
-                          log.level === 'success' ? '#00e676' :
-                          '#00f0ff'; // info
-                        
-                        if (log.message && !log.node) {
-                          return (
-                            <div key={idx} style={{ lineBreak: 'anywhere', color: '#e2e8f0' }}>
-                              {log.message}
-                            </div>
-                          );
-                        }
-
-                        const showLevel = log.level && log.level.trim() !== "";
-                        return (
-                          <div key={idx} style={{ display: 'flex', gap: '8px', lineBreak: 'anywhere', paddingBottom: '1px' }}>
-                            <span style={{ color: '#5c7080', flexShrink: 0 }}>[{log.timestamp}]</span>
-                            <span style={{ color: '#00f0ff', fontWeight: 600, flexShrink: 0 }}>[{log.node?.toUpperCase()}]</span>
-                            {showLevel && <span style={{ color: levelColor, fontWeight: 700, flexShrink: 0 }}>[{log.level?.toUpperCase()}]</span>}
-                            <span style={{ color: '#cbd5e1' }}>{log.message}</span>
-                          </div>
-                        );
-                      })
-                    )}
-                    <div ref={terminalEndRef}></div>
-                  </div>
-                </div>
+              <div style={{ flex: 1, position: 'relative' }}>
+                <LiveMap trains={trains} incidents={incidents} />
               </div>
-              
-              {/* TaskBoard & SMS Outbox side-by-side split */}
-              <div style={{ display: 'flex', borderTop: '1px solid #1a2433', height: '240px' }}>
-                <div style={{ flex: 2, overflowY: 'auto' }}>
-                  <TaskBoard tasks={tasks} onResolve={handleResolve} />
-                </div>
-                <div style={{
-                  flex: 1,
-                  backgroundColor: '#0d1117',
-                  borderLeft: '1px solid #1a2433',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '16px',
-                  overflow: 'hidden'
-                }}>
-                  <h3 className="palantir-mono" style={{ fontSize: '10px', fontWeight: 700, color: '#5c7080', letterSpacing: '1.5px', marginBottom: '8px' }}>
-                    PASSENGER SMS DISPATCH OUTBOX
-                  </h3>
-                  <div style={{
-                    flex: 1,
-                    backgroundColor: '#05070a',
-                    border: '1px solid #1a2433',
-                    padding: '10px',
-                    overflowY: 'auto',
-                    fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '9px',
-                    color: '#8a9ba8',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '6px'
-                  }}>
-                    {smsLogs.length === 0 ? (
-                      <div style={{ color: '#5c7080', fontStyle: 'italic' }}>[OUTBOX] Awaiting alert triggers...</div>
-                    ) : (
-                      smsLogs.map((log, idx) => (
-                        <div key={idx} style={{
-                          borderBottom: '1px solid #121820',
-                          paddingBottom: '4px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '2px'
-                        }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ffb300', fontWeight: 600 }}>
-                            <span>TO: {log.to}</span>
-                            <span style={{ color: '#00e676' }}>[SENT]</span>
-                          </div>
-                          <p style={{ margin: 0, color: '#cbd5e1' }}>{log.body}</p>
-                          <span style={{ fontSize: '8px', color: '#5c7080' }}>SID: {log.sid}</span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
+              <TaskBoard tasks={tasks} onResolve={handleResolve} />
             </div>
             <IncidentFeed 
               incidents={incidents} 
               onApprove={handleApprove}
-              onOverride={handleOverride}
               onAcknowledge={handleAcknowledge}
             />
           </div>
@@ -1751,6 +1269,9 @@ function MainApp() {
       case 'Fleet':
         return <AssetsView />;
 
+      case 'Simulation':
+        return <SimulationView />;
+
       default:
         return <div className="palantir-mono" style={{ padding: '24px', fontSize: '12px' }}>[ PAGE NOT DEPLOYED ]</div>;
     }
@@ -1779,30 +1300,7 @@ function MainApp() {
         onSettingsClick={() => setShowSettings(true)}
         onNotificationsClick={() => setShowNotifications(true)}
         onProfileClick={() => setShowProfile(true)}
-        liveFlash={liveFlash}
-        cycleCountdown={cycleCountdown}
       />
-
-      {cascadeAlert && (
-        <div className="palantir-mono animate-pulse" style={{
-          backgroundColor: '#ff3366',
-          color: '#ffffff',
-          padding: '10px 24px',
-          fontSize: '11px',
-          fontWeight: 700,
-          fontFamily: "'JetBrains Mono', monospace",
-          letterSpacing: '1px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          borderBottom: '1px solid #ff0044',
-          boxShadow: '0 4px 15px rgba(255, 51, 102, 0.4)',
-          zIndex: 999
-        }}>
-          <span style={{ display: 'inline-block', width: '8px', height: '8px', backgroundColor: '#ffffff', borderRadius: '50%', animation: 'pulse-live 1s infinite' }}></span>
-          <span>⚠ {cascadeAlert.message.toUpperCase()} — AGENT IMPLEMENTING NETWORK-WIDE CORRIDOR DETOUR RESPONSE.</span>
-        </div>
-      )}
 
       {wsStatus === 'reconnecting' && (
         <div style={{
@@ -1835,7 +1333,7 @@ function MainApp() {
       )}
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} agentState={agentState} />
+        <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         {renderContent()}
       </div>
 

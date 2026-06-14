@@ -1305,7 +1305,7 @@ async def supervisor_node(state: AgentState) -> dict:
         await log_agent("supervisor_node", f"[RAILMIND] Supervisor evaluating graph state... (Last execution: {last_node})")
 
         anomalies = state.get("anomalies", [])
-        if not anomalies or state.get("should_continue") is False:
+        if last_node == "supervisor_node" and (not anomalies or state.get("should_continue") is False):
             return {"next_node": "END", "last_node_executed": "supervisor_node"}
 
         # If we just came from ingest, we must go to detect.
