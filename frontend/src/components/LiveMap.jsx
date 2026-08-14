@@ -29,7 +29,7 @@ const ANIMATION_CSS = `
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    border: 3px solid #ff3366;
+    border: 3px solid #ef4444;
     background: transparent;
     position: absolute;
     left: -16px;
@@ -38,16 +38,16 @@ const ANIMATION_CSS = `
     animation: shockwaveExpand 1.8s ease-out forwards;
   }
   .shockwave-ring.warning {
-    border-color: #ffb300;
+    border-color: #f59e0b;
   }
   .leaflet-popup-content-wrapper {
-    background: #121820 !important;
-    border: 1px solid #1a2433 !important;
-    border-radius: 0 !important;
-    box-shadow: 0 0 20px rgba(0,240,255,0.15) !important;
+    background: #11141a !important;
+    border: 1px solid #2b3240 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
     padding: 0 !important;
   }
-  .leaflet-popup-tip { background: #121820 !important; }
+  .leaflet-popup-tip { background: #11141a !important; }
   .leaflet-popup-content { margin: 0 !important; }
 `;
 
@@ -160,19 +160,19 @@ const getDetourCoords = (planText) => {
 };
 
 const createMarkerIcon = (status, delay, isSelected = false) => {
-  let color = '#00f0ff';
-  if (status === 'cancelled' || delay > 60) color = '#ff3366';
-  else if (status === 'delayed' || delay > 15) color = '#ffb300';
-  const size = isSelected ? 16 : 10;
-  const glow = isSelected ? `0 0 14px ${color}, 0 0 28px ${color}40` : `0 0 8px ${color}80`;
+  let color = '#10b981'; // Nominal Green
+  if (status === 'cancelled' || delay > 60) color = '#ef4444'; // Critical Red
+  else if (status === 'delayed' || delay > 15) color = '#f59e0b'; // Amber Warning
+  const size = isSelected ? 18 : 12;
+  const glow = isSelected ? `0 0 14px ${color}, 0 0 28px ${color}60` : `0 0 8px ${color}80`;
   return L.divIcon({
     html: `<div style="
       width:${size}px; height:${size}px;
       background:${color};
-      border: 2px solid #fff;
+      border: 2.5px solid #ffffff;
       border-radius: 50%;
       box-shadow: ${glow};
-      transition: all 0.4s ease;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     "></div>`,
     className: 'train-position-marker',
     iconSize: [size, size],
@@ -191,7 +191,7 @@ const createShockwaveIcon = (severity) => {
 };
 
 // ─── Component: Animated Polyline (flowing dashes) ───────────────────────────
-function AnimatedPolyline({ positions, color = '#00f0ff', weight = 3, isDashed = false }) {
+function AnimatedPolyline({ positions, color = '#cbd5e1', weight = 3, isDashed = false }) {
   const map = useMap();
   const polylineRef = useRef(null);
 
@@ -227,14 +227,15 @@ function ToastOverlay({ toasts }) {
     }}>
       {toasts.map(t => (
         <div key={t.id} style={{
-          backgroundColor: '#0d1117',
+          backgroundColor: '#11141a',
           border: `1px solid ${t.color}`,
-          boxShadow: `0 0 12px ${t.color}40`,
+          boxShadow: `0 4px 12px rgba(0,0,0,0.5)`,
           padding: '10px 14px',
           borderLeft: `4px solid ${t.color}`,
+          borderRadius: '4px',
           fontFamily: "'JetBrains Mono', monospace",
           fontSize: '11px',
-          color: '#e2e8f0',
+          color: '#ffffff',
           minWidth: '260px',
           animation: t.fading
             ? 'toastFadeOut 0.5s ease forwards'
