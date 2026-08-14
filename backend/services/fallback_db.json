@@ -497,7 +497,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Bardhaman station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:08:47.172609"
     },
     {
@@ -506,7 +506,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12259 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:08:47.172609"
     },
     {
@@ -515,7 +515,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12259 Sealdah Duronto Express is running late by 67 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:08:47.172609"
     },
     {
@@ -551,7 +551,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Secunderabad station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:23:16.695199"
     },
     {
@@ -560,7 +560,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12627 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:23:16.695199"
     },
     {
@@ -569,7 +569,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12627 Karnataka Express is running late by 51 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:23:16.695199"
     },
     {

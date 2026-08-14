@@ -33,25 +33,25 @@ export default function RouteIntelligence({ trains = [] }) {
       {/* Route Tree Navigation (Left Column) */}
       <div style={{
         width: '240px',
-        backgroundColor: '#0d1117',
-        borderRight: '1px solid #1a2433',
+        backgroundColor: '#090b0e',
+        borderRight: '1px solid #2b3240',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
         padding: '16px 0',
         flexShrink: 0
       }}>
-        <div style={{ padding: '0 16px 12px 16px', borderBottom: '1px solid #1a2433' }}>
-          <span className="palantir-mono" style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', letterSpacing: '0.5px' }}>Route Tree</span>
+        <div style={{ padding: '0 16px 12px 16px', borderBottom: '1px solid #2b3240' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 600, color: '#e2e8f0', letterSpacing: '0.5px' }}>Route Tree</span>
         </div>
         
         <div style={{ padding: '16px 8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           {/* Network Root Folder */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 8px', cursor: 'pointer', color: '#e2e8f0' }}>
-              <ChevronDown size={14} style={{ color: '#5c7080' }} />
-              <Folder size={14} style={{ color: '#00f0ff' }} />
-              <span className="palantir-mono" style={{ fontSize: '11px', fontWeight: 600 }}>Rail Network</span>
+              <ChevronDown size={14} style={{ color: '#64748b' }} />
+              <Folder size={14} style={{ color: '#06b6d4' }} />
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', fontWeight: 600 }}>Rail Network</span>
             </div>
             
             {/* Sector Folders */}
@@ -60,11 +60,11 @@ export default function RouteIntelligence({ trains = [] }) {
               <div>
                 <div 
                   onClick={() => toggleSector('Sector 4')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', cursor: 'pointer', color: '#8a9ba8' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', cursor: 'pointer', color: '#94a3b8' }}
                 >
                   {expandedSectors.has('Sector 4') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  <Folder size={12} style={{ color: '#ffb300' }} />
-                  <span className="palantir-mono" style={{ fontSize: '11px' }}>Sector 4</span>
+                  <Folder size={12} style={{ color: '#f59e0b' }} />
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>Sector 4</span>
                 </div>
                 
                 {expandedSectors.has('Sector 4') && (
@@ -75,13 +75,14 @@ export default function RouteIntelligence({ trains = [] }) {
                         onClick={() => setSelectedTrain(tr)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', cursor: 'pointer',
-                          backgroundColor: selectedTrain === tr ? 'rgba(0, 240, 255, 0.08)' : 'transparent',
-                          color: selectedTrain === tr ? '#00f0ff' : '#8a9ba8',
-                          borderLeft: selectedTrain === tr ? '2px solid #00f0ff' : '2px solid transparent'
+                          backgroundColor: selectedTrain === tr ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
+                          color: selectedTrain === tr ? '#06b6d4' : '#94a3b8',
+                          borderLeft: selectedTrain === tr ? '2px solid #06b6d4' : '2px solid transparent',
+                          borderRadius: '4px'
                         }}
                       >
                         <Train size={12} />
-                        <span className="palantir-mono" style={{ fontSize: '11px' }}>{tr}</span>
+                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>{tr}</span>
                       </div>
                     ))}
                   </div>
@@ -92,11 +93,11 @@ export default function RouteIntelligence({ trains = [] }) {
               <div>
                 <div 
                   onClick={() => toggleSector('Sector 5')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', cursor: 'pointer', color: '#8a9ba8' }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', cursor: 'pointer', color: '#94a3b8' }}
                 >
                   {expandedSectors.has('Sector 5') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  <Folder size={12} style={{ color: '#ffb300' }} />
-                  <span className="palantir-mono" style={{ fontSize: '11px' }}>Sector 5</span>
+                  <Folder size={12} style={{ color: '#f59e0b' }} />
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>Sector 5</span>
                 </div>
                 
                 {expandedSectors.has('Sector 5') && (
@@ -107,13 +108,14 @@ export default function RouteIntelligence({ trains = [] }) {
                         onClick={() => setSelectedTrain(tr)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', cursor: 'pointer',
-                          backgroundColor: selectedTrain === tr ? 'rgba(0, 240, 255, 0.08)' : 'transparent',
-                          color: selectedTrain === tr ? '#00f0ff' : '#8a9ba8',
-                          borderLeft: selectedTrain === tr ? '2px solid #00f0ff' : '2px solid transparent'
+                          backgroundColor: selectedTrain === tr ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
+                          color: selectedTrain === tr ? '#06b6d4' : '#94a3b8',
+                          borderLeft: selectedTrain === tr ? '2px solid #06b6d4' : '2px solid transparent',
+                          borderRadius: '4px'
                         }}
                       >
                         <Train size={12} />
-                        <span className="palantir-mono" style={{ fontSize: '11px' }}>{tr}</span>
+                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>{tr}</span>
                       </div>
                     ))}
                   </div>
@@ -128,7 +130,7 @@ export default function RouteIntelligence({ trains = [] }) {
       {/* Center Console Workspace */}
       <div style={{
         flex: 1,
-        backgroundColor: '#080a0d',
+        backgroundColor: '#05070a',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -137,25 +139,26 @@ export default function RouteIntelligence({ trains = [] }) {
         
         {/* Breadcrumb Header */}
         <div style={{
-          padding: '16px 24px',
-          borderBottom: '1px solid #1a2433',
+          padding: '20px 24px',
+          borderBottom: '1px solid #2b3240',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          backgroundColor: '#0d1117'
+          backgroundColor: '#090b0e'
         }}>
-          <div className="palantir-mono" style={{ fontSize: '11px', color: '#8a9ba8' }}>
-            Rail Network &gt; {activeRoute.sector} &gt; <span style={{ color: '#00f0ff', fontWeight: 600 }}>{activeRoute.train}</span>
+          <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#94a3b8' }}>
+            Rail Network &gt; {activeRoute.sector} &gt; <span style={{ color: '#06b6d4', fontWeight: 600 }}>{activeRoute.train}</span>
           </div>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="palantir-mono" style={{
-              fontSize: '10px',
-              backgroundColor: '#121820',
-              border: '1px solid #1a2433',
-              color: '#8a9ba8',
-              padding: '4px 10px',
-              borderRadius: '2px'
+            <span style={{
+              fontFamily: "'Outfit', sans-serif",
+              fontSize: '11px',
+              backgroundColor: '#11141a',
+              border: '1px solid #2b3240',
+              color: '#94a3b8',
+              padding: '6px 12px',
+              borderRadius: '6px'
             }}>
               ⚙ Last 24h
             </span>
@@ -164,27 +167,29 @@ export default function RouteIntelligence({ trains = [] }) {
 
         {/* Metrics Grid (Row) */}
         <div style={{ padding: '24px 24px 12px 24px' }}>
-          <div className="palantir-mono" style={{ fontSize: '11px', color: '#e2e8f0', fontWeight: 600, marginBottom: '12px', letterSpacing: '0.5px' }}>Metrics Grid</div>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '12px', color: '#e2e8f0', fontWeight: 600, marginBottom: '16px', letterSpacing: '0.5px' }}>Metrics Grid</div>
           <div style={{ display: 'flex', gap: '16px' }}>
             
             {/* Speed Metric */}
             <div style={{
               flex: 1,
-              backgroundColor: '#0d1117',
-              border: '1px solid #1a2433',
-              padding: '16px',
-              position: 'relative'
+              backgroundColor: '#11141a',
+              border: '1px solid #2b3240',
+              padding: '20px',
+              position: 'relative',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#5c7080' }}>
-                <span className="palantir-mono">Train Speed</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600 }}>Train Speed</span>
                 <span>•••</span>
               </div>
-              <div className="palantir-mono" style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc', margin: '8px 0 2px 0' }}>{activeRoute.speed}</div>
-              <span className="palantir-mono" style={{ fontSize: '9px', color: '#5c7080' }}>Real-time</span>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '24px', fontWeight: 700, color: '#f8fafc', margin: '12px 0 2px 0' }}>{activeRoute.speed}</div>
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: '#64748b' }}>Real-time</span>
               {/* Sparkline SVG */}
-              <div style={{ marginTop: '10px', height: '32px' }}>
+              <div style={{ marginTop: '14px', height: '32px' }}>
                 <svg width="100%" height="100%" viewBox="0 0 100 30" preserveAspectRatio="none">
-                  <path d="M0 25 Q15 5, 30 18 T60 8 T90 20 L100 15" fill="none" stroke="#00f0ff" strokeWidth={1.5} />
+                  <path d="M0 25 Q15 5, 30 18 T60 8 T90 20 L100 15" fill="none" stroke="#06b6d4" strokeWidth={2} />
                 </svg>
               </div>
             </div>
@@ -192,23 +197,25 @@ export default function RouteIntelligence({ trains = [] }) {
             {/* Fuel Efficiency */}
             <div style={{
               flex: 1,
-              backgroundColor: '#0d1117',
-              border: '1px solid #1a2433',
-              padding: '16px',
-              position: 'relative'
+              backgroundColor: '#11141a',
+              border: '1px solid #2b3240',
+              padding: '20px',
+              position: 'relative',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#5c7080' }}>
-                <span className="palantir-mono">Fuel Efficiency</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748b' }}>
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontWeight: 600 }}>Fuel Efficiency</span>
                 <span>•••</span>
               </div>
-              <div className="palantir-mono" style={{ fontSize: '20px', fontWeight: 700, color: '#f8fafc', margin: '8px 0 2px 0' }}>
-                {activeRoute.fuel} <span style={{ color: '#00e676', fontSize: '12px' }}>↗</span>
+              <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '24px', fontWeight: 700, color: '#f8fafc', margin: '12px 0 2px 0' }}>
+                {activeRoute.fuel} <span style={{ color: '#10b981', fontSize: '16px' }}>↗</span>
               </div>
-              <span className="palantir-mono" style={{ fontSize: '9px', color: '#5c7080' }}>Target: 92%</span>
+              <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: '#64748b' }}>Target: 92%</span>
               {/* Green Sparkline SVG */}
-              <div style={{ marginTop: '10px', height: '32px' }}>
+              <div style={{ marginTop: '14px', height: '32px' }}>
                 <svg width="100%" height="100%" viewBox="0 0 100 30" preserveAspectRatio="none">
-                  <path d="M0 28 Q20 20, 40 25 T80 15 T100 8" fill="none" stroke="#00e676" strokeWidth={1.5} />
+                  <path d="M0 28 Q20 20, 40 25 T80 15 T100 8" fill="none" stroke="#10b981" strokeWidth={2} />
                 </svg>
               </div>
             </div>
@@ -216,23 +223,25 @@ export default function RouteIntelligence({ trains = [] }) {
             {/* Delay Probability */}
             <div style={{
               flex: 1,
-              backgroundColor: '#0d1117',
-              border: '1px solid #1a2433',
-              padding: '16px',
+              backgroundColor: '#11141a',
+              border: '1px solid #2b3240',
+              padding: '20px',
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center'
+              alignItems: 'center',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', justifySelf: 'flex-start' }}>
-                <span className="palantir-mono" style={{ fontSize: '10px', color: '#5c7080' }}>Delay Probability</span>
-                <span className="palantir-mono" style={{ fontSize: '18px', fontWeight: 700, color: '#f8fafc', marginTop: '8px' }}>{activeRoute.delayProb}% Low</span>
-                <span className="palantir-mono" style={{ fontSize: '9px', color: '#5c7080', marginTop: '4px' }}>Confidence: {activeRoute.confidence}%</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Delay Probability</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '22px', fontWeight: 700, color: '#f8fafc', marginTop: '12px' }}>{activeRoute.delayProb}% Low</span>
+                <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: '#64748b', marginTop: '6px' }}>Confidence: {activeRoute.confidence}%</span>
               </div>
               {/* Circular Progress Ring */}
-              <div style={{ width: '48px', height: '48px', position: 'relative' }}>
+              <div style={{ width: '56px', height: '56px', position: 'relative' }}>
                 <svg width="100%" height="100%" viewBox="0 0 36 36">
-                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#1a2433" strokeWidth={3} />
-                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#00e676" strokeWidth={3} strokeDasharray={`${activeRoute.delayProb}, 100`} />
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2b3240" strokeWidth={3} />
+                  <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#10b981" strokeWidth={3} strokeDasharray={`${activeRoute.delayProb}, 100`} />
                 </svg>
               </div>
             </div>
@@ -242,77 +251,81 @@ export default function RouteIntelligence({ trains = [] }) {
 
         {/* Route Timeline / Gantt Log Layout */}
         <div style={{ padding: '0 24px 24px 24px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          <div className="palantir-mono" style={{ fontSize: '11px', color: '#e2e8f0', fontWeight: 600, marginBottom: '12px', letterSpacing: '0.5px' }}>Route Timeline/Log</div>
+          <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '12px', color: '#e2e8f0', fontWeight: 600, marginBottom: '16px', letterSpacing: '0.5px' }}>Route Timeline/Log</div>
           
           <div style={{
             flex: 1,
-            backgroundColor: '#0d1117',
-            border: '1px solid #1a2433',
+            backgroundColor: '#11141a',
+            border: '1px solid #2b3240',
             display: 'flex',
             flexDirection: 'column',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            borderRadius: '8px'
           }}>
             {/* Timeline Hour Axis Header */}
             <div style={{
               display: 'flex',
-              padding: '12px 16px',
-              borderBottom: '1px solid #1a2433',
-              backgroundColor: '#121820'
+              padding: '16px',
+              borderBottom: '1px solid #2b3240',
+              backgroundColor: '#090b0e'
             }}>
               {['12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00'].map((hour, index) => (
-                <div key={index} className="palantir-mono" style={{ flex: 1, textAlign: 'center', fontSize: '10px', color: '#5c7080' }}>
+                <div key={index} style={{ flex: 1, textAlign: 'center', fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#64748b' }}>
                   {hour}
                 </div>
               ))}
             </div>
 
             {/* Gantt Row Bars */}
-            <div style={{ flex: 1, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+            <div style={{ flex: 1, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
               
               {/* Mumbai Block */}
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }} className="palantir-mono">
-                  <span style={{ fontSize: '11px', color: '#e2e8f0' }}>Mumbai</span>
+                <div style={{ width: '100px', flexShrink: 0 }}>
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Mumbai</span>
                 </div>
-                <div style={{ flex: 1, position: 'relative', height: '36px' }}>
+                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
                   <div style={{
                     position: 'absolute', left: '0%', width: '35%', height: '100%',
-                    backgroundColor: '#ff3366', borderLeft: '4px solid #ff3366',
-                    padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center'
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid #ef4444',
+                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                    borderRadius: '0 4px 4px 0'
                   }}>
-                    <span className="palantir-mono" style={{ fontSize: '10px', color: '#080a0d', fontWeight: 700 }}>Delayed</span>
+                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#ef4444', fontWeight: 700 }}>Delayed</span>
                   </div>
                 </div>
               </div>
 
               {/* Surat Block */}
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }} className="palantir-mono">
-                  <span style={{ fontSize: '11px', color: '#e2e8f0' }}>Surat</span>
+                <div style={{ width: '100px', flexShrink: 0 }}>
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Surat</span>
                 </div>
-                <div style={{ flex: 1, position: 'relative', height: '36px' }}>
+                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
                   <div style={{
                     position: 'absolute', left: '35%', width: '30%', height: '100%',
-                    backgroundColor: '#00e676', borderLeft: '4px solid #00e676',
-                    padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center'
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)', borderLeft: '4px solid #10b981',
+                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                    borderRadius: '0 4px 4px 0'
                   }}>
-                    <span className="palantir-mono" style={{ fontSize: '10px', color: '#080a0d', fontWeight: 700 }}>On Time</span>
+                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#10b981', fontWeight: 700 }}>On Time</span>
                   </div>
                 </div>
               </div>
 
               {/* Nagpur Block */}
               <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }} className="palantir-mono">
-                  <span style={{ fontSize: '11px', color: '#e2e8f0' }}>Nagpur</span>
+                <div style={{ width: '100px', flexShrink: 0 }}>
+                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Nagpur</span>
                 </div>
-                <div style={{ flex: 1, position: 'relative', height: '36px' }}>
+                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
                   <div style={{
                     position: 'absolute', left: '65%', width: '25%', height: '100%',
-                    backgroundColor: '#ffb300', borderLeft: '4px solid #ffb300',
-                    padding: '6px 10px', display: 'flex', flexDirection: 'column', justifyContent: 'center'
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid #f59e0b',
+                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                    borderRadius: '0 4px 4px 0'
                   }}>
-                    <span className="palantir-mono" style={{ fontSize: '10px', color: '#080a0d', fontWeight: 700 }}>Signal Warning</span>
+                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#f59e0b', fontWeight: 700 }}>Signal Warning</span>
                   </div>
                 </div>
               </div>
@@ -326,8 +339,8 @@ export default function RouteIntelligence({ trains = [] }) {
       {/* AI Insights & Recommendation Panel (Right Column) */}
       <div style={{
         width: '320px',
-        backgroundColor: '#0d1117',
-        borderLeft: '1px solid #1a2433',
+        backgroundColor: '#090b0e',
+        borderLeft: '1px solid #2b3240',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
@@ -335,65 +348,69 @@ export default function RouteIntelligence({ trains = [] }) {
       }}>
         {/* Header */}
         <div style={{
-          padding: '20px',
-          borderBottom: '1px solid #1a2433',
+          padding: '24px 20px',
+          borderBottom: '1px solid #2b3240',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
           <div>
-            <h2 className="palantir-mono" style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', letterSpacing: '0.5px' }}>AI Insights</h2>
-            <span className="palantir-mono" style={{ fontSize: '9px', color: '#5c7080' }}>Natural language summaries</span>
+            <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '14px', fontWeight: 600, color: '#e2e8f0', letterSpacing: '0.5px', margin: '0 0 4px 0' }}>AI Insights</h2>
+            <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: '#64748b' }}>Natural language summaries</span>
           </div>
-          <button style={{ backgroundColor: 'transparent', border: 'none', color: '#5c7080', cursor: 'pointer' }}>
+          <button style={{ backgroundColor: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
             <span style={{ fontSize: '14px', fontWeight: 700 }}>•••</span>
           </button>
         </div>
 
         {/* Content Details */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Performance Summary */}
           <div style={{
-            backgroundColor: '#121820',
-            border: '1px solid #1a2433',
-            padding: '16px',
-            borderRadius: '2px'
+            backgroundColor: '#11141a',
+            border: '1px solid #2b3240',
+            padding: '20px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
           }}>
-            <h4 className="palantir-mono" style={{ fontSize: '11px', color: '#00f0ff', marginBottom: '8px', fontWeight: 700 }}>
+            <h4 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', color: '#06b6d4', margin: '0 0 12px 0', fontWeight: 700 }}>
               ⎎ Performance Summary
             </h4>
-            <p style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#cbd5e1', lineHeight: '1.6', margin: 0 }}>
               Route running within acceptable parameters despite minor delays at Mumbai and Nagpur. Fuel efficiency is slightly above target.
             </p>
           </div>
 
           {/* Suggested Optimizations */}
           <div style={{
-            backgroundColor: '#121820',
-            border: '1px solid #1a2433',
-            padding: '16px',
-            borderRadius: '2px',
+            backgroundColor: '#11141a',
+            border: '1px solid #2b3240',
+            padding: '20px',
+            borderRadius: '8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px'
+            gap: '16px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
           }}>
-            <h4 className="palantir-mono" style={{ fontSize: '11px', color: '#ffb300', fontWeight: 700 }}>
+            <h4 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', color: '#f59e0b', fontWeight: 700, margin: 0 }}>
               ↯ Suggested Optimizations
             </h4>
-            <p style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: '1.5' }}>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#cbd5e1', lineHeight: '1.6', margin: 0 }}>
               Reroute recommended due to signal maintenance at Nagpur. Suggesting alternate path via Wardha junction to avoid potential 15-minute delay.
             </p>
             <button style={{
-              backgroundColor: '#1c2430',
-              border: '1px solid #1a2433',
-              color: '#00f0ff',
-              padding: '8px 16px',
-              fontSize: '11px',
+              backgroundColor: '#1e293b',
+              border: '1px solid #334155',
+              color: '#06b6d4',
+              padding: '10px 16px',
+              fontSize: '12px',
               fontWeight: 700,
               cursor: 'pointer',
               alignSelf: 'flex-start',
-              fontFamily: "'JetBrains Mono', monospace"
+              fontFamily: "'Plus Jakarta Sans', sans-serif",
+              borderRadius: '6px',
+              transition: 'all 0.2s'
             }}>
               Review Path
             </button>
@@ -401,15 +418,16 @@ export default function RouteIntelligence({ trains = [] }) {
 
           {/* Anomaly Detection Status block */}
           <div style={{
-            backgroundColor: '#121820',
-            border: '1px solid #1a2433',
-            padding: '16px',
-            borderRadius: '2px'
+            backgroundColor: '#11141a',
+            border: '1px solid #2b3240',
+            padding: '20px',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
           }}>
-            <h4 className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080', marginBottom: '8px', fontWeight: 700 }}>
+            <h4 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', color: '#64748b', margin: '0 0 12px 0', fontWeight: 700 }}>
               🛡 Anomaly Detection
             </h4>
-            <p className="palantir-mono" style={{ fontSize: '11px', color: '#5c7080' }}>
+            <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#94a3b8', margin: 0 }}>
               No current critical anomalies detected.
             </p>
           </div>

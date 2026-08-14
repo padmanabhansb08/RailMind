@@ -192,13 +192,13 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
   const getSeverityStyles = (severity = "info") => {
     switch (severity.toLowerCase()) {
       case 'critical':
-        return { color: '#ff3366', bg: 'rgba(255, 51, 102, 0.05)', icon: ShieldAlert };
+        return { color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', icon: ShieldAlert };
       case 'warning':
       case 'medium':
       case 'high':
-        return { color: '#ffb300', bg: 'rgba(255, 179, 0, 0.05)', icon: AlertTriangle };
+        return { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', icon: AlertTriangle };
       default:
-        return { color: '#00f0ff', bg: 'rgba(0, 240, 255, 0.05)', icon: Info };
+        return { color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.1)', icon: Info };
     }
   };
 
@@ -229,8 +229,8 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
   return (
     <div style={{
       width: '340px',
-      backgroundColor: '#0d1117',
-      borderLeft: '1px solid #1a2433',
+      backgroundColor: '#090b0e',
+      borderLeft: '1px solid #2b3240',
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
@@ -238,28 +238,28 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
     }}>
       {/* Header */}
       <div style={{
-        padding: '16px 20px',
-        borderBottom: '1px solid #1a2433',
+        padding: '20px',
+        borderBottom: '1px solid #2b3240',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#0d1117'
+        backgroundColor: '#090b0e'
       }}>
         <div>
-          <h2 className="palantir-mono" style={{ fontSize: '11px', fontWeight: 700, color: '#f8fafc', letterSpacing: '1px', margin: 0 }}>
+          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 600, color: '#f8fafc', letterSpacing: '1px', margin: 0 }}>
             LIVE OPERATION ALERTS [{activeCount}]
           </h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{
             display: 'inline-block',
-            width: '6px',
-            height: '6px',
-            backgroundColor: activeCount > 0 ? '#ff3366' : '#00e676',
+            width: '8px',
+            height: '8px',
+            backgroundColor: activeCount > 0 ? '#ef4444' : '#10b981',
             borderRadius: '50%',
             animation: activeCount > 0 ? 'pulse-live 1.2s infinite' : 'none'
           }}></span>
-          <span className="palantir-mono" style={{ fontSize: '9px', color: '#5c7080', fontWeight: 600 }}>TACTICAL FEED</span>
+          <span className="palantir-mono" style={{ fontSize: '9px', color: '#64748b', fontWeight: 600 }}>TACTICAL FEED</span>
         </div>
       </div>
 
@@ -307,15 +307,15 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
               <div 
                 key={incident.id} 
                 style={{
-                  backgroundColor: '#121820',
-                  border: `1px solid #1a2433`,
-                  borderLeft: `3px solid ${severityStyles.color}`,
-                  padding: '14px',
+                  backgroundColor: '#11141a',
+                  border: `1px solid #2b3240`,
+                  borderLeft: `4px solid ${severityStyles.color}`,
+                  borderRadius: '6px',
+                  padding: '16px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '10px',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                  fontFamily: "'JetBrains Mono', monospace"
+                  gap: '12px',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
                 }}
               >
                 {/* Header: Severity & Timer */}
@@ -337,12 +337,12 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
                 </div>
 
                 {/* Train Name & Number */}
-                <div style={{ fontSize: '12px', fontWeight: '700', color: '#ffffff' }}>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '14px', fontWeight: '700', color: '#ffffff' }}>
                   {trainNumber} {trainName}
                 </div>
 
                 {/* Delay description */}
-                <div style={{ fontSize: '11px', color: '#e2e8f0' }}>
+                <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#cbd5e1' }}>
                   {delayMins}min delay at {currentStationName}
                 </div>
 
@@ -374,37 +374,39 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
 
                 {/* Agent Decision */}
                 <div style={{
-                  backgroundColor: '#0a0d14',
-                  border: '1px solid #1a2433',
-                  padding: '10px',
+                  backgroundColor: '#090b0e',
+                  border: '1px solid #2b3240',
+                  borderRadius: '4px',
+                  padding: '12px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '4px'
+                  gap: '6px'
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #121820', paddingBottom: '4px' }}>
-                    <span style={{ fontSize: '9px', fontWeight: 700, color: '#00f0ff' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1e293b', paddingBottom: '6px' }}>
+                    <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, color: '#06b6d4', letterSpacing: '0.5px' }}>
                       AGENT DECISION ({confidenceScore}% confidence)
                     </span>
                   </div>
-                  <p style={{ fontSize: '10px', color: '#e2e8f0', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
-                    "{incident.reroute_plan || 'Divert via Allahabad loop line. Platform 4→1 at CNB. Est. recovery: 18 minutes.'}"
+                  <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#e2e8f0', margin: 0, lineHeight: '1.5' }}>
+                    {incident.reroute_plan || 'Divert via Allahabad loop line. Platform 4→1 at CNB. Est. recovery: 18 minutes.'}
                   </p>
                 </div>
 
                 {/* Prediction */}
                 <div style={{
-                  backgroundColor: 'rgba(255, 51, 102, 0.03)',
-                  border: '1px dashed rgba(255, 51, 102, 0.2)',
-                  padding: '10px',
+                  backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                  border: '1px dashed rgba(239, 68, 68, 0.3)',
+                  borderRadius: '4px',
+                  padding: '12px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '4px'
+                  gap: '6px'
                 }}>
-                  <div style={{ fontSize: '9px', fontWeight: 700, color: '#ff3366' }}>
+                  <div style={{ fontFamily: "'Outfit', sans-serif", fontSize: '10px', fontWeight: 700, color: '#ef4444', letterSpacing: '0.5px' }}>
                     PREDICTION
                   </div>
-                  <p style={{ fontSize: '10px', color: '#e2e8f0', margin: 0, lineHeight: '1.4', fontStyle: 'italic' }}>
-                    "{predictionText}"
+                  <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#e2e8f0', margin: 0, lineHeight: '1.5' }}>
+                    {predictionText}
                   </p>
                 </div>
 
@@ -584,21 +586,21 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
 
       {/* Bottom Filter & Export Toggle */}
       <div style={{
-        padding: '12px 16px',
-        borderTop: '1px solid #1a2433',
+        padding: '16px',
+        borderTop: '1px solid #2b3240',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#0a0c10'
+        backgroundColor: '#090b0e'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#8a9ba8', fontWeight: 600 }}>Filters</span>
-          <svg style={{ width: '10px', height: '10px', color: '#8a9ba8' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Filters</span>
+          <svg style={{ width: '12px', height: '12px', color: '#94a3b8' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#5c7080', fontWeight: 600 }}>Log export</span>
-          <label style={{ position: 'relative', display: 'inline-block', width: '28px', height: '16px' }}>
+          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Log export</span>
+          <label style={{ position: 'relative', display: 'inline-block', width: '32px', height: '18px' }}>
             <input 
               type="checkbox" 
               checked={logExport}
@@ -607,11 +609,11 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
             />
             <span style={{
               position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: logExport ? '#00e676' : '#1a2433', transition: '.2s', borderRadius: '8px'
+              backgroundColor: logExport ? '#10b981' : '#1e293b', transition: '.2s', borderRadius: '10px'
             }}>
               <span style={{
-                position: 'absolute', content: '""', height: '10px', width: '10px', left: logExport ? '15px' : '3px', bottom: '3px',
-                backgroundColor: logExport ? '#080a0d' : '#8a9ba8', transition: '.2s', borderRadius: '50%'
+                position: 'absolute', content: '""', height: '12px', width: '12px', left: logExport ? '16px' : '3px', bottom: '3px',
+                backgroundColor: logExport ? '#090b0e' : '#94a3b8', transition: '.2s', borderRadius: '50%'
               }} />
             </span>
           </label>
