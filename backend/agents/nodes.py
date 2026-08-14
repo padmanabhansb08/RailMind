@@ -1304,39 +1304,34 @@ async def supervisor_node(state: AgentState) -> dict:
         last_node = state.get("last_node_executed")
         await log_agent("supervisor_node", f"[RAILMIND] Supervisor evaluating graph state... (Last execution: {last_node})")
 
+        # Self correction loop check first
+        claude_reasoning_raw = state.get("claude_reasoning")
+        if claude_reasoning_raw and claude_reasoning_raw != "{}":
+            try:
+                reasoning = json.loads(claude_reasoning_raw)
+                maintenance = reasoning.get("maintenance_task", "")
+                if "Kanpur" in maintenance and "restricted" in maintenance.lower():
+                    # Mock conflict logic
+                    await log_agent("supervisor_node", "[RAILMIND] [WARNING] Conflict detected in maintenance task. Re-routing to Reasoner.")
+                    return {
+                        "errors": ["Maintenance task conflicts with active line configurations at Kanpur."],
+                        "claude_reasoning": "{}", # clear to force re-reason
+                        "next_node": "reason_node",
+                        "last_node_executed": "supervisor_node"
+                    }
+            except json.JSONDecodeError as e:
+                logger.warning("JSON parse failed: %s", e)
+            except Exception:
+                logger.exception("Unexpected error in supervisor self-correction logic")
+                raise
+
         anomalies = state.get("anomalies", [])
         if last_node == "supervisor_node" and (not anomalies or state.get("should_continue") is False):
             return {"next_node": "END", "last_node_executed": "supervisor_node"}
 
         # If we just came from ingest, we must go to detect.
-        if not last_node or last_node == "ingest_node" or last_node == "supervisor_node" and not anomalies:
+        if not last_node or last_node == "ingest_node" or (last_node == "supervisor_node" and not anomalies):
              return {"next_node": "detect_node", "last_node_executed": "supervisor_node"}
-
-        # If reasoning hasn't happened or failed to produce plan
-        if not state.get("claude_reasoning") or state.get("claude_reasoning") == "{}":
-            if getattr(state, "get", lambda k,d: d)("ai_latency_ms", -1) > 0:
-                 # AI ran but returned nothing. Stop ping-ponging.
-                 return {"next_node": "END", "last_node_executed": "supervisor_node"}
-            return {"next_node": "reason_node", "last_node_executed": "supervisor_node"}
-
-        # Self correction loop check
-        try:
-            reasoning = json.loads(state.get("claude_reasoning", "{}"))
-            maintenance = reasoning.get("maintenance_task", "")
-            if "Kanpur" in maintenance and "restricted" in maintenance.lower():
-                 # Mock conflict logic
-                 await log_agent("supervisor_node", "[RAILMIND] [WARNING] Conflict detected in maintenance task. Re-routing to Reasoner.")
-                 return {
-                     "errors": ["Maintenance task conflicts with active line configurations at Kanpur."],
-                     "claude_reasoning": "{}", # clear to force re-reason
-                     "next_node": "reason_node",
-                     "last_node_executed": "supervisor_node"
-                 }
-        except json.JSONDecodeError as e:
-            logger.warning("JSON parse failed: %s", e)
-        except Exception:
-            logger.exception("Unexpected error in supervisor self-correction logic")
-            raise
 
         if not state.get("reroute_plan"):
              return {"next_node": "reroute_node", "last_node_executed": "supervisor_node"}

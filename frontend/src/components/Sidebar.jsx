@@ -20,8 +20,8 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
   return (
     <div style={{
       width: '240px',
-      backgroundColor: '#0d1117',
-      borderRight: '1px solid #1a2433',
+      backgroundColor: '#11141a',
+      borderRight: '1px solid #2b3240',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
@@ -31,9 +31,9 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
     }}>
       <div>
         {/* Header */}
-        <div style={{ padding: '0 24px 24px 24px', borderBottom: '1px solid #1a2433' }}>
-          <h2 className="palantir-mono" style={{ fontSize: '15px', fontWeight: 600, color: '#e2e8f0', letterSpacing: '1px' }}>SYS // ALPHA</h2>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#00f0ff', fontWeight: 500 }}>Monitoring: Active</span>
+        <div style={{ padding: '0 24px 24px 24px', borderBottom: '1px solid #2b3240' }}>
+          <h2 className="palantir-mono" style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff', letterSpacing: '1px' }}>SYS // ALPHA</h2>
+          <span className="palantir-mono" style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>Monitoring: Active</span>
         </div>
 
         {/* Navigation */}
@@ -51,11 +51,11 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
                   alignItems: 'center',
                   gap: '12px',
                   padding: '12px 16px',
-                  backgroundColor: isActive ? '#121820' : 'transparent',
+                  backgroundColor: isActive ? '#181c24' : 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? '3px solid #00f0ff' : '3px solid transparent',
-                  borderRadius: '0px',
-                  color: isActive ? '#00f0ff' : '#8a9ba8',
+                  borderLeft: isActive ? '3px solid #ffffff' : '3px solid transparent',
+                  borderRadius: '4px',
+                  color: isActive ? '#ffffff' : '#cbd5e1',
                   fontSize: '12px',
                   fontWeight: 600,
                   cursor: 'pointer',
@@ -65,18 +65,18 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.backgroundColor = '#17202b';
-                    e.currentTarget.style.color = '#e2e8f0';
+                    e.currentTarget.style.backgroundColor = '#212632';
+                    e.currentTarget.style.color = '#ffffff';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#8a9ba8';
+                    e.currentTarget.style.color = '#cbd5e1';
                   }
                 }}
               >
-                <Icon size={16} style={{ color: isActive ? '#00f0ff' : '#5c7080' }} />
+                <Icon size={16} style={{ color: isActive ? '#ffffff' : '#94a3b8' }} />
                 {item.name}
               </button>
             );
@@ -99,11 +99,11 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
                 alignItems: 'center',
                 gap: '12px',
                 padding: '10px 16px',
-                backgroundColor: isActive ? '#121820' : 'transparent',
+                backgroundColor: isActive ? '#181c24' : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #00f0ff' : '3px solid transparent',
-                borderRadius: '0px',
-                color: isActive ? '#00f0ff' : '#5c7080',
+                borderLeft: isActive ? '3px solid #ffffff' : '3px solid transparent',
+                borderRadius: '4px',
+                color: isActive ? '#ffffff' : '#94a3b8',
                 fontSize: '10px',
                 fontWeight: 600,
                 letterSpacing: '0.5px',
@@ -114,18 +114,18 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = '#17202b';
-                  e.currentTarget.style.color = '#e2e8f0';
+                  e.currentTarget.style.backgroundColor = '#212632';
+                  e.currentTarget.style.color = '#ffffff';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#5c7080';
+                  e.currentTarget.style.color = '#94a3b8';
                 }
               }}
             >
-              <Icon size={14} style={{ color: '#5c7080' }} />
+              <Icon size={14} style={{ color: '#94a3b8' }} />
               {item.name}
             </button>
           );

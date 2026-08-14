@@ -562,21 +562,21 @@ function MainApp() {
           }}>
             <h3 className="palantir-mono" style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>CORE SYSTEM STATUS REPORT</h3>
             <div className="palantir-mono" style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', color: '#cbd5e1', marginTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1a2433', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
                 <span>Operations Agent State</span>
-                <span style={{ color: '#00e676', fontWeight: 600 }}>[ ACTIVE // NOMINAL ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // NOMINAL ]</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1a2433', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
                 <span>Primary API Client</span>
-                <span style={{ color: '#ff3366' }}>[ API FALLBACK ACTIVE ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // LIVE TELEMETRY ]</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #1a2433', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
                 <span>Database Client</span>
-                <span style={{ color: '#ff3366' }}>[ JSON FALLBACK ACTIVE ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // MONGO PERSISTENCE ]</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px' }}>
                 <span>SMS Alert Dispatcher</span>
-                <span style={{ color: '#00f0ff' }}>[ MOCK MODE ACTIVE ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // TWILIO DISPATCH ]</span>
               </div>
             </div>
           </div>

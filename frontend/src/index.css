@@ -1,22 +1,23 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300..700;1,300..700&family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --bg-main: #080a0d;
-  --bg-panel: #0d1117;
-  --bg-card: #121820;
-  --bg-card-hover: #17202b;
-  --border-color: #1a2433;
-  --border-color-active: #3b82f6;
-  --text-primary: #e2e8f0;
-  --text-secondary: #8a9ba8;
-  --text-muted: #5c7080;
-  --accent-color: #00f0ff;
+  --bg-main: #090b0e;
+  --bg-panel: #11141a;
+  --bg-card: #181c24;
+  --bg-card-hover: #212632;
+  --border-color: #2b3240;
+  --border-color-active: #ffffff;
   
-  --color-critical: #ff3366;
-  --color-warning: #ffb300;
-  --color-info: #00f0ff;
-  --color-resolved: #00e676;
+  --text-primary: #ffffff;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --accent-color: #f8fafc;
+  
+  --color-critical: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #cbd5e1;
+  --color-resolved: #10b981;
 }
 
 * {
@@ -26,34 +27,41 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
   background-color: var(--bg-main);
   background-image: 
-    radial-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 0),
-    radial-gradient(rgba(0, 240, 255, 0.02) 2px, transparent 0);
+    radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0),
+    radial-gradient(rgba(255, 255, 255, 0.02) 2px, transparent 0);
   background-size: 24px 24px, 48px 48px;
   background-position: 0 0, 12px 12px;
   color: var(--text-primary);
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
 }
 
 /* Monospace Utility */
 .palantir-mono {
-  font-family: 'JetBrains Mono', 'Share Tech Mono', monospace !important;
+  font-family: 'JetBrains Mono', monospace !important;
 }
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 5px;
+  height: 5px;
 }
 ::-webkit-scrollbar-track {
   background: var(--bg-panel);
 }
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
-  border-radius: 0px;
+  border-radius: 2px;
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
@@ -63,15 +71,15 @@ body {
 @keyframes pulse-live {
   0% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.5);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.6);
   }
   70% {
     transform: scale(1);
-    box-shadow: 0 0 0 8px rgba(0, 240, 255, 0);
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
   }
   100% {
     transform: scale(0.95);
-    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
   }
 }
 
@@ -88,12 +96,15 @@ body {
 .leaflet-container {
   width: 100%;
   height: 100%;
-  background-color: #080a0d !important;
+  background-color: #090b0e !important;
+  font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
 .leaflet-control-zoom {
   border: 1px solid var(--border-color) !important;
   box-shadow: none !important;
+  border-radius: 4px !important;
+  overflow: hidden;
 }
 
 .leaflet-control-zoom-in,
@@ -107,8 +118,8 @@ body {
 
 .leaflet-control-zoom-in:hover,
 .leaflet-control-zoom-out:hover {
-  background-color: var(--bg-card) !important;
-  color: var(--accent-color) !important;
+  background-color: var(--bg-card-hover) !important;
+  color: var(--text-primary) !important;
 }
 
 .leaflet-bar {
@@ -121,9 +132,9 @@ body {
   background-color: var(--bg-card) !important;
   color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
-  border-radius: 0px !important;
+  border-radius: 6px !important;
   padding: 0 !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.7) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
 }
 
 .leaflet-popup-content {
@@ -147,6 +158,7 @@ body {
   background-color: var(--bg-panel);
   border: 1px solid var(--border-color);
   position: relative;
+  border-radius: 4px;
 }
 
 .terminal-panel::before {
@@ -172,18 +184,18 @@ body {
 @keyframes flash-active {
   0% {
     transform: scale(1);
-    background-color: #00e676;
-    box-shadow: 0 0 0px #00e676;
+    background-color: #10b981;
+    box-shadow: 0 0 0px #10b981;
   }
   50% {
-    transform: scale(1.6);
-    background-color: #00ff88;
-    box-shadow: 0 0 15px #00ff88;
+    transform: scale(1.4);
+    background-color: #34d399;
+    box-shadow: 0 0 15px #34d399;
   }
   100% {
     transform: scale(1);
-    background-color: #00e676;
-    box-shadow: 0 0 0px #00e676;
+    background-color: #10b981;
+    box-shadow: 0 0 0px #10b981;
   }
 }
 
@@ -193,19 +205,19 @@ body {
 
 /* Agent Brain Column Pulses */
 @keyframes pulse-cyan {
-  0% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
-  50% { border-color: #00f0ff; box-shadow: 0 0 12px rgba(0, 240, 255, 0.25); background-color: rgba(0, 240, 255, 0.05); }
-  100% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
+  0% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
+  50% { border-color: #ffffff; box-shadow: 0 0 12px rgba(255, 255, 255, 0.2); background-color: rgba(255, 255, 255, 0.05); }
+  100% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
 }
 @keyframes pulse-yellow {
-  0% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
-  50% { border-color: #ffb300; box-shadow: 0 0 12px rgba(255, 179, 0, 0.25); background-color: rgba(255, 179, 0, 0.05); }
-  100% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
+  0% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
+  50% { border-color: #f59e0b; box-shadow: 0 0 12px rgba(245, 158, 11, 0.25); background-color: rgba(245, 158, 11, 0.05); }
+  100% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
 }
 @keyframes pulse-green {
-  0% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
-  50% { border-color: #00e676; box-shadow: 0 0 12px rgba(0, 230, 118, 0.25); background-color: rgba(0, 230, 118, 0.05); }
-  100% { border-color: #1a2433; box-shadow: none; background-color: #121820; }
+  0% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
+  50% { border-color: #10b981; box-shadow: 0 0 12px rgba(16, 185, 129, 0.25); background-color: rgba(16, 185, 129, 0.05); }
+  100% { border-color: #2b3240; box-shadow: none; background-color: #181c24; }
 }
 .pulse-perceive {
   animation: pulse-cyan 1.5s infinite ease-in-out;
@@ -216,4 +228,5 @@ body {
 .pulse-act {
   animation: pulse-green 1.5s infinite ease-in-out;
 }
+
 

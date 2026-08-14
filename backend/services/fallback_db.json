@@ -416,7 +416,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Kanpur Central station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:56:35.050375"
     },
     {
@@ -425,7 +425,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12301 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:56:35.050375"
     },
     {
@@ -434,7 +434,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12301 Howrah Rajdhani Express is running late by 45 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:56:35.050375"
     },
     {
@@ -443,7 +443,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Kanpur Central station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:58:39.768362"
     },
     {
@@ -452,7 +452,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12301 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:58:39.768362"
     },
     {
@@ -461,7 +461,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12301 Howrah Rajdhani Express is running late by 60 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 10:58:39.768362"
     },
     {
@@ -470,7 +470,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Bhopal station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:03:14.374963"
     },
     {
@@ -479,7 +479,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12951 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:03:14.374963"
     },
     {
@@ -488,7 +488,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12951 Mumbai Rajdhani Express is running late by 22 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:03:14.374963"
     },
     {
@@ -524,7 +524,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Gorakhpur station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:14:21.191369"
     },
     {
@@ -533,7 +533,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12565 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:14:21.191369"
     },
     {
@@ -542,7 +542,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12565 Bihar Sampark Kranti Express is running late by 34 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:14:21.191369"
     },
     {
@@ -922,6 +922,43 @@
       "action_required": "Make passenger announcement + update platform boards",
       "status": "pending",
       "timestamp": "2026-06-14 13:04:01.066977"
+    },
+    {
+      "incident_id": "87096458-11da-425f-a67d-bf653162b214",
+      "department": "maintenance",
+      "task_description": "Platform inspection CNB",
+      "urgency": "critical",
+      "action_required": "Emergency dispatch action",
+      "status": "pending",
+      "timestamp": "2026-08-14 06:30:36.762730"
+    },
+    {
+      "incident_id": "ba7eeb4b-8888-4f70-a847-a30bab60a634",
+      "department": "maintenance",
+      "task_description": "Platform inspection CNB",
+      "urgency": "critical",
+      "action_required": "Emergency dispatch action",
+      "status": "pending",
+      "timestamp": "2026-08-14 06:33:16.135885"
+    },
+    {
+      "incident_id": "ac80f1f0-0847-45cf-96c0-066ca3fcc12e",
+      "department": "maintenance",
+      "task_description": "Platform inspection CNB",
+      "urgency": "critical",
+      "action_required": "Emergency dispatch action",
+      "status": "pending",
+      "timestamp": "2026-08-14 06:34:23.143239"
+    },
+    {
+      "incident_id": "477e22d5-8361-4d01-b1f2-925cbcc57ce9",
+      "department": "maintenance",
+      "task_description": "Platform inspection CNB",
+      "urgency": "critical",
+      "action_required": "Emergency dispatch action",
+      "status": "pending",
+      "timestamp": "2026-08-14 06:35:09.352431"
     }
-  ]
+  ],
+  "agent_memory": []
 }
