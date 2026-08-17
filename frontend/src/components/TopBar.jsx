@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Settings } from 'lucide-react';
 
-export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'connected', onNotificationsClick, onSettingsClick, onProfileClick, activeTab = 'Dashboard', onTabChange, liveFlash = false, cycleCountdown = 30 }) {
+export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'connected', onNotificationsClick, onSettingsClick, onProfileClick, activeTab = 'Dashboard', onTabChange, liveFlash = false, cycleCountdown = 30, onSearch }) {
   const tabs = ['Rail Network', 'Sensor Data', 'Timetable', 'Fleet'];
+  const [searchValue, setSearchValue] = useState("");
   // Keep tab mapping aligned with App.jsx
   const activeTopTab = ['Sensor Data', 'Timetable', 'Fleet'].includes(activeTab) ? activeTab : 'Rail Network';
   const isConnected = wsStatus === 'connected';
@@ -20,14 +21,14 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
       flexShrink: 0
     }}>
       {/* Left section: Logo & Nav tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '32px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '48px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="palantir-mono" style={{
+          <span style={{
             fontSize: '18px',
             fontWeight: 800,
-            color: '#ffffff', 
-            letterSpacing: '1px'
-          }}>RAILMIND <span style={{ color: '#94a3b8', fontWeight: 500 }}>// COMMAND CENTER</span></span>
+            color: 'var(--text-primary)', 
+            letterSpacing: '0.5px'
+          }}>RailMind</span>
         </div>
         
         {/* Nav tabs */}
@@ -41,15 +42,13 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
                 style={{
                   backgroundColor: 'transparent',
                   border: 'none',
-                  borderBottom: isActive ? '2px solid #ffffff' : '2px solid transparent',
-                  color: isActive ? '#ffffff' : '#cbd5e1',
+                  borderBottom: isActive ? '2px solid var(--text-primary)' : '2px solid transparent',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                   cursor: 'pointer',
-                  fontFamily: "'JetBrains Mono', monospace",
-                  fontSize: '13px',
-                  fontWeight: isActive ? 700 : 500,
+                  fontSize: '15px',
+                  fontWeight: isActive ? 600 : 500,
                   height: '64px',
-                  padding: '0 4px',
-                  textTransform: 'uppercase',
+                  padding: '0 12px',
                   transition: 'all 0.2s ease'
                 }}
               >
@@ -67,21 +66,34 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
         <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
           <input 
             type="text" 
-            placeholder="Search or Enter Command" 
-            className="palantir-mono"
-            style={{
-              backgroundColor: '#090b0e',
-              border: '1px solid #2b3240',
-              borderRadius: '4px',
-              color: '#ffffff',
-              padding: '6px 12px 6px 28px',
-              fontSize: '11px',
-              width: '180px',
-              outline: 'none',
-              transition: 'border-color 0.2s'
+            placeholder="Search train..." 
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && onSearch) {
+                onSearch(searchValue);
+                setSearchValue('');
+              }
             }}
-            onFocus={(e) => e.target.style.borderColor = '#ffffff'}
-            onBlur={(e) => e.target.style.borderColor = '#2b3240'}
+            style={{
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
+              color: 'var(--text-primary)',
+              padding: '8px 12px 8px 32px',
+              fontSize: '13px',
+              width: '200px',
+              outline: 'none',
+              transition: 'border-color 0.2s, box-shadow 0.2s'
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = 'var(--accent-color)';
+              e.target.style.boxShadow = '0 0 0 1px var(--accent-color)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = 'var(--border-color)';
+              e.target.style.boxShadow = 'none';
+            }}
           />
           <svg 
             style={{ position: 'absolute', left: '8px', width: '12px', height: '12px', color: '#94a3b8' }} 
@@ -95,10 +107,10 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          backgroundColor: '#090b0e',
-          border: '1px solid #2b3240',
-          borderRadius: '4px',
-          padding: '6px 14px',
+          backgroundColor: 'var(--bg-main)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '8px',
+          padding: '8px 16px',
           gap: '16px'
         }}>
           {/* LIVE/OFFLINE status */}
@@ -107,47 +119,46 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
               className={`${isConnected ? "pulse-dot-cyan" : ""} ${liveFlash ? "flash-active-trigger" : ""}`} 
               style={{
                 display: 'inline-block',
-                width: '6px',
-                height: '6px',
-                backgroundColor: isConnected ? '#10b981' : '#ef4444',
+                width: '8px',
+                height: '8px',
+                backgroundColor: isConnected ? 'var(--color-resolved)' : 'var(--color-critical)',
                 borderRadius: '50%'
               }}
             ></span>
-            <span className="palantir-mono" style={{ 
-              fontSize: '11px', 
+            <span style={{ 
+              fontSize: '12px', 
               fontWeight: 600, 
-              color: isConnected ? '#10b981' : '#ef4444', 
-              letterSpacing: '0.5px' 
+              color: isConnected ? 'var(--color-resolved)' : 'var(--color-critical)'
             }}>
               {isConnected ? 'System Online' : 'System Offline'}
             </span>
           </div>
           
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#2b3240' }}></div>
+          <div style={{ width: '1px', height: '14px', backgroundColor: 'var(--border-color)' }}></div>
 
           {/* LOOP COUNT */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span className="palantir-mono" style={{ fontSize: '10px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.5px' }}>Cycles:</span>
-            <span className="palantir-mono" style={{ fontSize: '13px', fontWeight: 700, color: '#ffffff' }}>[{loopCount < 10 ? '0' + loopCount : loopCount}]</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', padding: '0 4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Cycles</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>{loopCount}</span>
           </div>
 
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#2b3240' }}></div>
+          <div style={{ width: '1px', height: '14px', backgroundColor: 'var(--border-color)' }}></div>
 
           {/* INCIDENTS count */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span className="palantir-mono" style={{ fontSize: '10px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.5px' }}>Alerts:</span>
-            <span className="palantir-mono" style={{ fontSize: '13px', fontWeight: 700, color: '#ef4444' }}>[{incidentCount < 10 ? '0' + incidentCount : incidentCount}]</span>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', padding: '0 4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Alerts</span>
+            <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-critical)' }}>{incidentCount}</span>
           </div>
 
-          <div style={{ width: '1px', height: '14px', backgroundColor: '#2b3240' }}></div>
+          <div style={{ width: '1px', height: '14px', backgroundColor: 'var(--border-color)' }}></div>
 
           {/* Next agent cycle countdown */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-            <span className="palantir-mono" style={{ fontSize: '10px', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.5px' }}>NEXT CYCLE:</span>
-            <span className="palantir-mono" style={{ 
-              fontSize: '13px', 
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', padding: '0 4px' }}>
+            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Next Cycle</span>
+            <span style={{ 
+              fontSize: '15px', 
               fontWeight: 700, 
-              color: cycleCountdown <= 5 ? '#ef4444' : '#f59e0b',
+              color: cycleCountdown <= 5 ? 'var(--color-critical)' : 'var(--color-warning)',
               transition: 'color 0.3s'
             }}>{cycleCountdown}s</span>
           </div>
@@ -214,7 +225,7 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
           <img 
             src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" 
             alt="User profile" 
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
           />
         </div>
 

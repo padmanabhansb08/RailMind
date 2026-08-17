@@ -1,5 +1,5 @@
 /* eslint-disable */
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, ZoomControl, Polyline, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 
@@ -254,6 +254,7 @@ function ToastOverlay({ toasts }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function LiveMap({ trains = [], incidents = [] }) {
   const [selectedTrainNo, setSelectedTrainNo] = useState(null);
+  const [backgroundSwarm, setBackgroundSwarm] = useState([]);
   const [toasts, setToasts] = useState([]);
   const [shockwaves, setShockwaves] = useState([]);
   const [trailDots, setTrailDots] = useState({});
@@ -261,6 +262,33 @@ export default function LiveMap({ trains = [], incidents = [] }) {
   const prevStationsRef    = useRef({});
   const prevIncidentIdsRef = useRef(new Set());
   const cssInjectedRef     = useRef(false);
+
+  // Fetch real RailRadar "all trains" grid data
+  useEffect(() => {
+    const fetchAllTrains = async () => {
+      try {
+        const API_BASE = window.location.hostname === "localhost" ? "http://localhost:8000" : "";
+        const res = await fetch(`${API_BASE}/api/trains/all`);
+        if (res.ok) {
+          const data = await res.json();
+          // Transform API array into map-friendly swarm dots, filtering out corrupted GPS coordinates (Ocean/Greenland trains)
+          const parsed = data.map(t => ({
+            id: t.train_number,
+            lat: t.current_lat || t.next_lat,
+            lng: t.current_lng || t.next_lng,
+            isDelayed: (t.departure_minutes > 15 || t.next_arrival_minutes > 15),
+            name: t.train_name
+          })).filter(t => t.lat && t.lng && t.lat > 5 && t.lat < 40 && t.lng > 65 && t.lng < 100); // Strict India Bounding Box
+          setBackgroundSwarm(parsed);
+        }
+      } catch (err) {
+        console.error("Failed to fetch massive train grid", err);
+      }
+    };
+    fetchAllTrains();
+    const interval = setInterval(fetchAllTrains, 60000); // refresh map grid every 60s
+    return () => clearInterval(interval);
+  }, []);
 
   // Inject animation CSS once
   useEffect(() => {
@@ -361,7 +389,7 @@ export default function LiveMap({ trains = [], incidents = [] }) {
       <ToastOverlay toasts={toasts} />
       <LiveClockBadge />
 
-      <MapContainer center={MAP_CENTER} zoom={5} zoomControl={false} style={{ width: '100%', height: '100%' }}>
+      <MapContainer center={MAP_CENTER} zoom={6} zoomControl={false} style={{ width: '100%', height: '100%' }}>
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -408,6 +436,22 @@ export default function LiveMap({ trains = [], incidents = [] }) {
             )}
           </>
         )}
+
+        {/* Feature D: Background Swarm (Non-Interactive, Visual Only) */}
+        {backgroundSwarm.map(dot => (
+          <CircleMarker
+            key={dot.id}
+            center={[dot.lat, dot.lng]}
+            radius={2}
+            pathOptions={{ 
+              color: dot.isDelayed ? '#f59e0b' : '#3b82f6', 
+              fillColor: dot.isDelayed ? '#f59e0b' : '#3b82f6', 
+              fillOpacity: 0.6, 
+              stroke: false 
+            }}
+            interactive={false}
+          />
+        ))}
 
         {/* Train Markers */}
         {activeTrains.map((train, idx) => {

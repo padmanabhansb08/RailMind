@@ -150,7 +150,7 @@ async def run_agent_loop_fallback():
             print(f"[RAILMIND] Real-Time background agent cognitive loop #{loop_cnt} completed.")
         except Exception as e:
             print(f"[RAILMIND] Real-Time background agent loop failed: {e}")
-        await asyncio.sleep(15)
+        await asyncio.sleep(5)
 
 @app.on_event("startup")
 async def startup_event():
@@ -217,8 +217,7 @@ async def get_trains_api():
     from ..services.railways_api import get_dynamic_position_and_status, RAW_MOCK_TRAINS
     trains = latest_agent_state.get("raw_train_data", [])
     if not trains:
-        # Fallback to mock data if empty (always includes route_stops)
-        return railways_client.mock_train_data()
+        return []
     # Enrich trains that are missing route_stops with dynamic position data
     enriched = []
     for train in trains:
@@ -236,6 +235,69 @@ async def get_trains_api():
         else:
             enriched.append(train)
     return enriched
+
+# Simple cache for the massive live map data (60 seconds)
+import time
+LIVE_MAP_CACHE = {"data": [], "timestamp": 0}
+
+@app.get("/api/trains/all")
+async def get_all_trains_api():
+    from ..services.railways_api import fetch_all_live_trains
+    current_time = time.time()
+    
+    # Return cached data if less than 60 seconds old to protect API limits
+    if current_time - LIVE_MAP_CACHE["timestamp"] < 60 and LIVE_MAP_CACHE["data"]:
+        return LIVE_MAP_CACHE["data"]
+        
+    # Otherwise fetch fresh data
+    data = await fetch_all_live_trains()
+    if data:
+        LIVE_MAP_CACHE["data"] = data
+        LIVE_MAP_CACHE["timestamp"] = current_time
+        return data
+        
+    # If fetch failed, return cached data anyway if available
+    return LIVE_MAP_CACHE["data"]
+
+# REST Endpoint: GET /api/trains/search - Search for a train and add to tracked list
+@app.get("/api/trains/search")
+async def search_train_api(train_number: str):
+    try:
+        from ..services.railways_api import get_live_train_status
+        from ..agents.nodes import TRACKED_TRAINS
+        
+        # Fetch the live status for this train
+        res = await get_live_train_status(train_number)
+        
+        if not res or not res.get("train_number"):
+            from ..services.railways_api import get_mock_rapidapi_train, parse_rapidapi_train_for_agent
+            mock_data = get_mock_rapidapi_train(train_number)
+            res = parse_rapidapi_train_for_agent(mock_data, train_number)
+            
+        if res and res.get("train_number"):
+            # Add to tracked trains list so it continues updating in background loop
+            if train_number not in TRACKED_TRAINS:
+                TRACKED_TRAINS.append(train_number)
+            
+            # Instantly inject into the latest agent state so GET /api/trains returns it immediately
+            # preventing the frontend from overwriting it during the 5s poll interval
+            from ..api.main import latest_agent_state
+            if "raw_train_data" not in latest_agent_state:
+                latest_agent_state["raw_train_data"] = []
+                
+            # Check if it's already in there to avoid duplicates
+            existing = next((t for t in latest_agent_state["raw_train_data"] if t["train_number"] == train_number), None)
+            if existing:
+                existing.update(res)
+            else:
+                latest_agent_state["raw_train_data"].append(res)
+                
+            return res
+            
+        return {"error": "Train not found"}
+    except Exception as e:
+        print(f"Error searching train: {e}")
+        return {"error": str(e)}
 
 # REST Endpoint: GET /api/dept-tasks - Fetch pending tasks
 @app.get("/api/dept-tasks")

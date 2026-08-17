@@ -62,6 +62,10 @@ class ConnectionManager:
             for connection in failed_connections:
                 self.disconnect(connection)
 
+    async def broadcast_json(self, data: dict):
+        import json
+        await self.broadcast(json.dumps(data))
+
     async def _listen_to_redis(self):
         while True:
             try:

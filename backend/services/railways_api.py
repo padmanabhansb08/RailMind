@@ -171,35 +171,21 @@ def parse_rapidapi_train_for_agent(data: dict, train_number: str) -> dict:
     if "complete" in title or "reached" in title:
         status = "reached"
         
-    lat = coords["lat"]
-    lng = coords["lng"]
+    # To keep the map highly kinetic (trains moving smoothly between stations), 
+    # we use the dynamic schedule interpolator for the physical GPS coordinates, 
+    # but overwrite the operational telemetry with the real RapidAPI data.
+    base = get_dynamic_position_and_status(t_num)
+    base["delay_minutes"] = delay_minutes
+    base["passenger_load"] = passenger_load
+    base["status"] = status
+    base["current_station"] = current_station
+    base["station_code"] = station_code
+    base["schedule_arrival"] = outer_data.get("cur_stn_sta", "-")
+    base["actual_arrival"] = outer_data.get("eta", "-")
+    base["source"] = outer_data.get("source_stn_name", "Unknown")
+    base["destination"] = outer_data.get("dest_stn_name", "Unknown")
     
-    # Add time-seeded sinusoidal drift (approx. 5km) for live demo feel
-    import math, time
-    try:
-        t_num_int = int(t_num)
-    except:
-        t_num_int = 0
-    drift_lat = 0.04 * math.sin(time.time() / 180.0 + t_num_int * 1.5)
-    drift_lng = 0.04 * math.cos(time.time() / 180.0 + t_num_int * 1.5)
-    lat += drift_lat
-    lng += drift_lng
-        
-    return {
-        "train_number": t_num,
-        "train_name": t_name,
-        "current_station": current_station,
-        "station_code": station_code,
-        "delay_minutes": delay_minutes,
-        "passenger_load": passenger_load,
-        "status": status,
-        "schedule_arrival": outer_data.get("cur_stn_sta", "-"),
-        "actual_arrival": outer_data.get("eta", "-"),
-        "source": outer_data.get("source_stn_name", "Unknown"),
-        "destination": outer_data.get("dest_stn_name", "Unknown"),
-        "lat": lat,
-        "lng": lng
-    }
+    return base
 
 RAW_MOCK_TRAINS = {
     "12301": {
@@ -887,23 +873,47 @@ def parse_ntes_train_for_agent(data: dict, train_number: str) -> dict:
     elif delay_minutes > 15:
         status = "delayed"
 
-    return {
-        "train_number": t_num,
-        "train_name": t_name,
-        "current_station": current_station,
-        "station_code": station_code,
-        "delay_minutes": delay_minutes,
-        "passenger_load": passenger_load,
-        "status": status,
-        "schedule_arrival": scheduled_arrival,
-        "actual_arrival": actual_arrival,
-        "source": source,
-        "destination": destination,
-        "lat": coords["lat"],
-        "lng": coords["lng"]
-    }
+    base = get_dynamic_position_and_status(t_num)
+    base["delay_minutes"] = delay_minutes
+    base["passenger_load"] = passenger_load
+    base["status"] = status
+    base["current_station"] = current_station
+    base["station_code"] = station_code
+    base["schedule_arrival"] = scheduled_arrival
+    base["actual_arrival"] = actual_arrival
+    base["source"] = source
+    base["destination"] = destination
+    
+    return base
+
+_live_status_cache = {}
+CACHE_TTL = 180  # Cache API responses for 3 minutes to preserve quota
 
 async def _get_live_train_status_impl(train_number: str) -> dict:
+    import time
+    global _live_status_cache
+    now = time.time()
+    
+    # Return cached data if valid
+    if train_number in _live_status_cache:
+        cached = _live_status_cache[train_number]
+        if now - cached["timestamp"] < CACHE_TTL:
+            # Re-apply dynamic map movement to cached data so it keeps moving
+            data = cached["data"].copy() if isinstance(cached["data"], dict) else cached["data"]
+            if isinstance(data, dict) and "lat" in data:
+                dynamic = get_dynamic_position_and_status(train_number)
+                data["lat"] = dynamic.get("lat", data["lat"])
+                data["lng"] = dynamic.get("lng", data["lng"])
+            return data
+
+    result = await _fetch_live_train_status_impl(train_number)
+    
+    if result:
+        _live_status_cache[train_number] = {"timestamp": now, "data": result}
+        
+    return result
+
+async def _fetch_live_train_status_impl(train_number: str) -> dict:
     if not train_number.isdigit():
         db_data = await get_db_realtime_data(train_number)
         if db_data:
@@ -961,6 +971,30 @@ async def _get_live_train_status_impl(train_number: str) -> dict:
     db_data = await get_db_realtime_data(train_number)
     if db_data:
         return db_data
+
+    # Fallback to the real RailRadar live map data we just integrated
+    radar_data = await fetch_all_live_trains()
+    if radar_data:
+        for t in radar_data:
+            if t.get("train_number") == train_number:
+                # Return the true live coordinates instead of New Delhi mock
+                delay = t.get("departure_minutes") or t.get("next_arrival_minutes") or 0
+                return {
+                    "train_number": train_number,
+                    "train_name": t.get("train_name", "Unknown Train"),
+                    "delay_minutes": delay,
+                    "passenger_load": "medium" if delay <= 15 else "high",
+                    "status": "delayed" if delay > 15 else "on_time",
+                    "current_station": t.get("next_station_name") or t.get("current_station_name") or "Unknown",
+                    "station_code": t.get("next_station") or t.get("current_station") or "UNK",
+                    "lat": t.get("current_lat") or t.get("next_lat"),
+                    "lng": t.get("current_lng") or t.get("next_lng"),
+                    "schedule_arrival": "-",
+                    "actual_arrival": "-",
+                    "source": "Unknown",
+                    "destination": "Unknown",
+                    "route_stops": []
+                }
 
     # Final fallback to mock data
     if train_number in RAW_MOCK_TRAINS:
@@ -1069,36 +1103,19 @@ def parse_train_for_agent(data: dict, train_number: str) -> dict:
     else: status = "on_time"
     
     station_code = current.get("StationCode", "NDLS")
-    coords = STATION_COORDS.get(station_code, {"lat": 20.5937, "lng": 78.9629, "name": "Unknown"})
-    lat = coords["lat"]
-    lng = coords["lng"]
-
-    # Add time-seeded sinusoidal drift (approx. 5km) for live demo feel
-    import math, time
-    try:
-        t_num_int = int(train_number)
-    except:
-        t_num_int = 0
-    drift_lat = 0.04 * math.sin(time.time() / 180.0 + t_num_int * 1.5)
-    drift_lng = 0.04 * math.cos(time.time() / 180.0 + t_num_int * 1.5)
-    lat += drift_lat
-    lng += drift_lng
+    # Apply dynamic map movement logic, overwriting with live telemetry
+    base = get_dynamic_position_and_status(train_number)
+    base["delay_minutes"] = delay_minutes
+    base["passenger_load"] = passenger_load
+    base["status"] = status
+    base["current_station"] = coords.get("name") if coords.get("name") != "Unknown" else current.get("StationName", "Unknown")
+    base["station_code"] = station_code
+    base["schedule_arrival"] = current.get("ScheduleArrival", "-")
+    base["actual_arrival"] = current.get("ActualArrival", "-")
+    base["source"] = route[0]["StationName"] if route else "Unknown"
+    base["destination"] = route[-1]["StationName"] if route else "Unknown"
     
-    return {
-        "train_number": train_number,
-        "train_name": data.get("TrainNumber", train_number),
-        "current_station": coords.get("name") if coords.get("name") != "Unknown" else current.get("StationName", "Unknown"),
-        "station_code": station_code,
-        "delay_minutes": delay_minutes,
-        "passenger_load": passenger_load,
-        "status": status,
-        "schedule_arrival": current.get("ScheduleArrival", "-"),
-        "actual_arrival": current.get("ActualArrival", "-"),
-        "source": route[0]["StationName"] if route else "Unknown",
-        "destination": route[-1]["StationName"] if route else "Unknown",
-        "lat": lat,
-        "lng": lng
-    }
+    return base
 
 class RailwaysAPIClient:
     def __init__(self, api_key: str = None):
@@ -1118,3 +1135,18 @@ class RailwaysAPIClient:
 
     async def get_multiple_trains(self, train_numbers: list) -> list:
         return await get_multiple_trains(train_numbers)
+
+async def fetch_all_live_trains() -> list:
+    """Fetches the live map snapshot of all trains from the RailRadar API"""
+    url = "https://api.railradar.in/v1/legacy/trains/live-map"
+    headers = {"Authorization": "Bearer rg_955e151f5aa84f6ebe1c70f9c36ecb33"}
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success") and "data" in data:
+                    return data["data"]
+    except Exception as e:
+        print(f"[RAILMIND] Failed to fetch live map snapshot: {e}")
+    return []

@@ -20,8 +20,8 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
   return (
     <div style={{
       width: '240px',
-      backgroundColor: '#11141a',
-      borderRight: '1px solid #2b3240',
+      backgroundColor: 'var(--bg-panel)',
+      borderRight: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'space-between',
@@ -31,9 +31,9 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
     }}>
       <div>
         {/* Header */}
-        <div style={{ padding: '0 24px 24px 24px', borderBottom: '1px solid #2b3240' }}>
-          <h2 className="palantir-mono" style={{ fontSize: '15px', fontWeight: 700, color: '#ffffff', letterSpacing: '1px' }}>SYS // ALPHA</h2>
-          <span className="palantir-mono" style={{ fontSize: '10px', color: '#10b981', fontWeight: 600 }}>Monitoring: Active</span>
+        <div style={{ padding: '0 24px 24px 24px', borderBottom: '1px solid var(--border-color)' }}>
+          <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>Workspace</h2>
+          <span style={{ fontSize: '11px', color: 'var(--color-resolved)', fontWeight: 500 }}>System Active</span>
         </div>
 
         {/* Navigation */}
@@ -45,19 +45,18 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
               <button
                 key={item.id}
                 onClick={() => setActiveTab && setActiveTab(item.id)}
-                className="palantir-mono"
+                className=""
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
-                  padding: '12px 16px',
-                  backgroundColor: isActive ? '#181c24' : 'transparent',
+                  padding: '10px 16px',
+                  backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
                   border: 'none',
-                  borderLeft: isActive ? '3px solid #ffffff' : '3px solid transparent',
-                  borderRadius: '4px',
-                  color: isActive ? '#ffffff' : '#cbd5e1',
-                  fontSize: '12px',
-                  fontWeight: 600,
+                  borderRadius: '8px',
+                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  fontSize: '13px',
+                  fontWeight: isActive ? 600 : 500,
                   cursor: 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.2s ease',
@@ -65,18 +64,18 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.backgroundColor = '#212632';
-                    e.currentTarget.style.color = '#ffffff';
+                    e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
+                    e.currentTarget.style.color = 'var(--text-primary)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
                     e.currentTarget.style.backgroundColor = 'transparent';
-                    e.currentTarget.style.color = '#cbd5e1';
+                    e.currentTarget.style.color = 'var(--text-secondary)';
                   }
                 }}
               >
-                <Icon size={16} style={{ color: isActive ? '#ffffff' : '#94a3b8' }} />
+                <Icon size={16} style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-muted)' }} />
                 {item.name}
               </button>
             );
@@ -93,20 +92,19 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
             <button
               key={item.id}
               onClick={() => setActiveTab && setActiveTab(item.id)}
-              className="palantir-mono"
+              className=""
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '12px',
                 padding: '10px 16px',
-                backgroundColor: isActive ? '#181c24' : 'transparent',
+                backgroundColor: isActive ? 'var(--bg-card)' : 'transparent',
                 border: 'none',
-                borderLeft: isActive ? '3px solid #ffffff' : '3px solid transparent',
-                borderRadius: '4px',
-                color: isActive ? '#ffffff' : '#94a3b8',
-                fontSize: '10px',
-                fontWeight: 600,
-                letterSpacing: '0.5px',
+                borderRadius: '8px',
+                color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontSize: '12px',
+                fontWeight: isActive ? 600 : 500,
+                letterSpacing: '0.2px',
                 cursor: 'pointer',
                 textAlign: 'left',
                 transition: 'all 0.2s ease',
@@ -114,18 +112,18 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
               }}
               onMouseEnter={(e) => {
                 if (!isActive) {
-                  e.currentTarget.style.backgroundColor = '#212632';
-                  e.currentTarget.style.color = '#ffffff';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
+                  e.currentTarget.style.color = 'var(--text-primary)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (!isActive) {
                   e.currentTarget.style.backgroundColor = 'transparent';
-                  e.currentTarget.style.color = '#94a3b8';
+                  e.currentTarget.style.color = 'var(--text-secondary)';
                 }
               }}
             >
-              <Icon size={14} style={{ color: '#94a3b8' }} />
+              <Icon size={16} style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }} />
               {item.name}
             </button>
           );

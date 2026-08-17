@@ -578,7 +578,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Secunderabad station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:27:12.352446"
     },
     {
@@ -587,7 +587,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12627 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:27:12.352446"
     },
     {
@@ -596,7 +596,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12627 Karnataka Express is running late by 51 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:27:12.352446"
     },
     {
@@ -605,7 +605,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Varanasi station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:31:53.951215"
     },
     {
@@ -614,7 +614,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12301 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:31:53.951215"
     },
     {
@@ -623,7 +623,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12301 Howrah Rajdhani Express is running late by 57 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:31:53.951215"
     },
     {
@@ -632,7 +632,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Vadodara station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:37:29.881560"
     },
     {
@@ -641,7 +641,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12951 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:37:29.881560"
     },
     {
@@ -650,7 +650,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12951 Mumbai Rajdhani Express is running late by 31 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:37:29.881560"
     },
     {
@@ -659,7 +659,7 @@
       "task_description": "Inspect and test signaling points and local circuits at Bardhaman station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:43:12.320637"
     },
     {
@@ -668,7 +668,7 @@
       "task_description": "Execute slot re-scheduling and coordinate clearance for train 12259 on the main line.",
       "urgency": "medium",
       "action_required": "Execute rerouting plan",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:43:12.320637"
     },
     {
@@ -677,7 +677,7 @@
       "task_description": "Make PA announcement: Passenger attention please, train 12259 Sealdah Duronto Express is running late by 71 minutes.",
       "urgency": "high",
       "action_required": "Make passenger announcement + update platform boards",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:43:12.320637"
     },
     {

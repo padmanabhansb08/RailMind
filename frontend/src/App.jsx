@@ -27,7 +27,7 @@ class ErrorBoundary extends React.Component {
       return (
           <div style={{
             padding: '40px',
-            backgroundColor: '#090b0e',
+            backgroundColor: 'var(--bg-main)',
             color: '#ef4444',
             height: '100vh',
             display: 'flex',
@@ -37,7 +37,7 @@ class ErrorBoundary extends React.Component {
             fontFamily: "'Plus Jakarta Sans', sans-serif",
             gap: '16px'
           }}>
-            <h2 style={{ fontWeight: 600 }}>[ SYSTEM ERROR // RAILMIND CRASH ]</h2>
+            <h2 style={{ fontWeight: 600 }}>System Encountered an Error</h2>
             <p style={{ color: '#94a3b8', fontSize: '13px' }}>RailMind Dashboard encountered an unrecoverable rendering error.</p>
             <button 
               onClick={() => window.location.reload()}
@@ -83,8 +83,8 @@ function MainApp() {
       const inc = incidents[i];
       result.push(
         <div key={inc.id} style={{
-          backgroundColor: '#181c24',
-          border: '1px solid #2b3240',
+          backgroundColor: 'var(--bg-card)',
+          border: '1px solid var(--border-color)',
           padding: '14px 16px',
           borderRadius: '8px',
           fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -158,6 +158,30 @@ function MainApp() {
       }
     } catch (err) {
       console.error("[API] Failed to fetch department tasks:", err);
+    }
+  };
+
+  const handleSearch = async (trainNumber) => {
+    if (!trainNumber) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/trains/search?train_number=${trainNumber}`);
+      if (res.ok) {
+        const newTrain = await res.json();
+        if (newTrain && newTrain.train_number) {
+          setTrains(prev => {
+            const exists = prev.find(t => t.train_number === newTrain.train_number);
+            if (exists) {
+              return prev.map(t => t.train_number === newTrain.train_number ? newTrain : t);
+            }
+            return [...prev, newTrain];
+          });
+          // Also set it as selected train by passing it to LiveMap? LiveMap doesn't lift state up.
+          // Wait, LiveMap manages selectedTrainNo internally, but we can't easily set it from App without lifting state.
+          // For now, adding it to the map is step 1.
+        }
+      }
+    } catch(err) {
+      console.error("Search failed:", err);
     }
   };
 
@@ -324,7 +348,7 @@ function MainApp() {
             <p  style={{ fontSize: '11px', color: '#64748b' }}>OPERATIONAL ALERTS AUDIT FEED</p>
           </div>
           {/* Filters */}
-          <div style={{ display: 'flex', gap: '8px', backgroundColor: '#090b0e', padding: '4px', borderRadius: '0px', border: '1px solid #2b3240' }}>
+          <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--bg-main)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
             {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map(f => (
               <button
                 key={f}
@@ -335,7 +359,7 @@ function MainApp() {
                   backgroundColor: filter === f ? '#06b6d4' : 'transparent',
                   color: filter === f ? '#05070a' : '#94a3b8',
                   border: 'none',
-                  borderRadius: '0px',
+                  borderRadius: '8px',
                   fontSize: '10px',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -350,8 +374,8 @@ function MainApp() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
           {filteredIncidents.length === 0 ? (
-            <div  style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: '#64748b', backgroundColor: '#090b0e', border: '1px dashed #2b3240' }}>
-              [ NO ANOMALIES RECORDED FOR STATUS: {filter} ]
+            <div  style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: '#64748b', backgroundColor: 'var(--bg-main)', border: '1px dashed #2b3240' }}>
+              No anomalies recorded for status: {filter}
             </div>
           ) : (
             filteredIncidents.map(inc => {
@@ -361,10 +385,10 @@ function MainApp() {
 
               return (
                 <div key={inc.id} style={{
-                  backgroundColor: '#11141a',
-                  border: '1px solid #2b3240',
+                  backgroundColor: 'var(--bg-panel)',
+                  border: '1px solid var(--border-color)',
                   borderLeft: `4px solid ${borderColor}`,
-                  borderRadius: '0px',
+                  borderRadius: '8px',
                   padding: '20px',
                   display: 'flex',
                   flexDirection: 'column',
@@ -393,7 +417,7 @@ function MainApp() {
                       backgroundColor: 'rgba(0, 240, 255, 0.02)',
                       border: '1px dashed #2b3240',
                       padding: '12px',
-                      borderRadius: '0px',
+                      borderRadius: '8px',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '8px'
@@ -416,7 +440,7 @@ function MainApp() {
                               backgroundColor: '#06b6d4',
                               color: '#05070a',
                               border: 'none',
-                              borderRadius: '0px',
+                              borderRadius: '8px',
                               padding: '4px 10px',
                               fontSize: '10px',
                               fontWeight: 700,
@@ -430,7 +454,7 @@ function MainApp() {
                     </div>
                   )}
 
-                  <div style={{ borderTop: '1px solid #2b3240', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span  style={{ fontSize: '10px', color: '#64748b' }}>
                       DISPATCH: {inc.departments.join(' // ') || 'NONE'}
                     </span>
@@ -453,9 +477,9 @@ function MainApp() {
                   {expandedIncident === inc.id && (
                     <div  style={{
                       backgroundColor: '#05070a',
-                      border: '1px solid #2b3240',
+                      border: '1px solid var(--border-color)',
                       padding: '12px',
-                      borderRadius: '0px',
+                      borderRadius: '8px',
                       fontSize: '11px',
                       color: '#94a3b8',
                       whiteSpace: 'pre-wrap',
@@ -497,9 +521,9 @@ function MainApp() {
             { label: 'AVG ANOMALY RESOLUTION', val: '4.2 min', color: '#cbd5e1' }
           ].map((stat, idx) => (
             <div key={idx} style={{
-              backgroundColor: '#090b0e',
-              border: '1px solid #2b3240',
-              borderRadius: '0px',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
@@ -517,9 +541,9 @@ function MainApp() {
           <div style={{
             flex: 1,
             minWidth: '340px',
-            backgroundColor: '#090b0e',
-            border: '1px solid #2b3240',
-            borderRadius: '0px',
+            backgroundColor: 'var(--bg-main)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
             padding: '24px',
             display: 'flex',
             flexDirection: 'column',
@@ -540,7 +564,7 @@ function MainApp() {
                       width: '32px',
                       height: `${Math.max(heightPercent, 6)}px`,
                       backgroundColor: bar.color,
-                      borderRadius: '0px',
+                      borderRadius: '8px',
                       transition: 'height 0.5s ease-out'
                     }}></div>
                     <span  style={{ fontSize: '10px', color: '#64748b' }}>{bar.name}</span>
@@ -553,9 +577,9 @@ function MainApp() {
           <div style={{
             flex: 1,
             minWidth: '340px',
-            backgroundColor: '#090b0e',
-            border: '1px solid #2b3240',
-            borderRadius: '0px',
+            backgroundColor: 'var(--bg-main)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
             padding: '24px',
             display: 'flex',
             flexDirection: 'column',
@@ -563,21 +587,21 @@ function MainApp() {
           }}>
             <h3  style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>CORE SYSTEM STATUS REPORT</h3>
             <div  style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', color: '#cbd5e1', marginTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                 <span>Operations Agent State</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // NOMINAL ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                 <span>Primary API Client</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // LIVE TELEMETRY ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #2b3240', paddingBottom: '6px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
                 <span>Database Client</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // MONGO PERSISTENCE ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px' }}>
                 <span>SMS Alert Dispatcher</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>[ ACTIVE // TWILIO DISPATCH ]</span>
+                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
               </div>
             </div>
           </div>
@@ -590,10 +614,10 @@ function MainApp() {
     return (
       <div style={{ padding: '40px', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', color: '#e2e8f0', textAlign: 'center' }}>
         <div style={{
-          backgroundColor: '#090b0e',
+          backgroundColor: 'var(--bg-main)',
           border: '1px solid #06b6d4',
           boxShadow: '0 0 15px rgba(0, 240, 255, 0.15)',
-          borderRadius: '0px',
+          borderRadius: '8px',
           padding: '40px 60px',
           display: 'flex',
           flexDirection: 'column',
@@ -609,7 +633,7 @@ function MainApp() {
           </p>
           <div style={{ width: '100%', height: '1px', backgroundColor: '#2b3240', margin: '10px 0' }}></div>
           <span  style={{ fontSize: '10px', color: '#ef4444', fontWeight: 600, letterSpacing: '0.5px' }}>
-            [ AUTHORIZED MILITARY / COGNITIVE AGENTS ONLY • SEC-SESSION 402 ]
+            Authorized Personnel Only
           </span>
         </div>
       </div>
@@ -641,8 +665,8 @@ function MainApp() {
             style={{
               padding: '6px 12px',
               backgroundColor: 'transparent',
-              border: '1px solid #2b3240',
-              borderRadius: '0px',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
               color: '#94a3b8',
               fontSize: '10px',
               fontWeight: 700,
@@ -667,8 +691,8 @@ function MainApp() {
         <div style={{
           flex: 1,
           backgroundColor: '#05070a',
-          border: '1px solid #2b3240',
-          borderRadius: '0px',
+          border: '1px solid var(--border-color)',
+          borderRadius: '8px',
           padding: '20px',
           overflowY: 'auto',
           display: 'flex',
@@ -723,7 +747,7 @@ function MainApp() {
     }, []);
 
     if (loading && !telemetry) {
-      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>[ Retrieving Sensor Data... ]</div>;
+      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>Retrieving Sensor Data...</div>;
     }
 
     const metrics = [
@@ -746,9 +770,9 @@ function MainApp() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
           {metrics.map((m, idx) => (
             <div key={idx} style={{
-              backgroundColor: '#090b0e',
-              border: '1px solid #2b3240',
-              borderRadius: '0px',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
@@ -788,7 +812,7 @@ function MainApp() {
     }, []);
 
     if (loading && scheduleTrains.length === 0) {
-      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>[ Retrieving Timetable... ]</div>;
+      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>Retrieving Timetable...</div>;
     }
 
     return (
@@ -799,14 +823,14 @@ function MainApp() {
         </div>
 
         <div style={{
-          backgroundColor: '#090b0e',
-          border: '1px solid #2b3240',
-          borderRadius: '0px',
+          backgroundColor: 'var(--bg-main)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '8px',
           overflow: 'hidden'
         }}>
           <table  style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
             <thead>
-              <tr style={{ backgroundColor: '#11141a', borderBottom: '1px solid #2b3240', color: '#94a3b8' }}>
+              <tr style={{ backgroundColor: 'var(--bg-panel)', borderBottom: '1px solid var(--border-color)', color: '#94a3b8' }}>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>TRAIN NO</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>NAME</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>CORRIDOR ROUTE</th>
@@ -868,7 +892,7 @@ function MainApp() {
     }, []);
 
     if (loading && !status) {
-      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>[ Connecting to System Fleet... ]</div>;
+      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>Connecting to System Fleet...</div>;
     }
 
     const services = [
@@ -890,9 +914,9 @@ function MainApp() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
           {services.map((s, idx) => (
             <div key={idx} style={{
-              backgroundColor: '#090b0e',
-              border: '1px solid #2b3240',
-              borderRadius: '0px',
+              backgroundColor: 'var(--bg-main)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '8px',
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
@@ -916,9 +940,9 @@ function MainApp() {
 
         {/* Contacts Section */}
         <div style={{
-          backgroundColor: '#090b0e',
-          border: '1px solid #2b3240',
-          borderRadius: '0px',
+          backgroundColor: 'var(--bg-main)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '8px',
           padding: '20px',
           display: 'flex',
           flexDirection: 'column',
@@ -1012,14 +1036,14 @@ function MainApp() {
           <div style={{
             flex: 2,
             minWidth: '360px',
-            backgroundColor: '#090b0e',
-            border: '1px solid #2b3240',
+            backgroundColor: 'var(--bg-main)',
+            border: '1px solid var(--border-color)',
             padding: '24px',
             display: 'flex',
             flexDirection: 'column',
             gap: '20px'
           }}>
-            <h3  style={{ fontSize: '13px', fontWeight: 600, color: '#06b6d4', borderBottom: '1px solid #2b3240', paddingBottom: '10px' }}>
+            <h3  style={{ fontSize: '13px', fontWeight: 600, color: '#06b6d4', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
               INJECTION CONFIGURATION
             </h3>
 
@@ -1031,13 +1055,13 @@ function MainApp() {
                   onChange={(e) => setSelectedTrain(e.target.value)}
                   
                   style={{
-                    backgroundColor: '#11141a',
-                    border: '1px solid #2b3240',
+                    backgroundColor: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
                     color: '#f8fafc',
                     padding: '10px',
                     fontSize: '11px',
                     outline: 'none',
-                    borderRadius: '0px',
+                    borderRadius: '8px',
                     width: '100%'
                   }}
                 >
@@ -1056,13 +1080,13 @@ function MainApp() {
                   onChange={(e) => setStatus(e.target.value)}
                   
                   style={{
-                    backgroundColor: '#11141a',
-                    border: '1px solid #2b3240',
+                    backgroundColor: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
                     color: '#f8fafc',
                     padding: '10px',
                     fontSize: '11px',
                     outline: 'none',
-                    borderRadius: '0px',
+                    borderRadius: '8px',
                     width: '100%'
                   }}
                 >
@@ -1083,13 +1107,13 @@ function MainApp() {
                   onChange={(e) => setDelayMinutes(e.target.value)}
                   
                   style={{
-                    backgroundColor: '#11141a',
-                    border: '1px solid #2b3240',
+                    backgroundColor: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
                     color: '#f8fafc',
                     padding: '10px',
                     fontSize: '11px',
                     outline: 'none',
-                    borderRadius: '0px',
+                    borderRadius: '8px',
                     width: '100%'
                   }}
                 />
@@ -1103,13 +1127,13 @@ function MainApp() {
                   onChange={(e) => setCurrentStation(e.target.value)}
                   
                   style={{
-                    backgroundColor: '#11141a',
-                    border: '1px solid #2b3240',
+                    backgroundColor: 'var(--bg-panel)',
+                    border: '1px solid var(--border-color)',
                     color: '#f8fafc',
                     padding: '10px',
                     fontSize: '11px',
                     outline: 'none',
-                    borderRadius: '0px',
+                    borderRadius: '8px',
                     width: '100%'
                   }}
                 />
@@ -1127,7 +1151,7 @@ function MainApp() {
                   backgroundColor: '#ef4444',
                   color: '#ffffff',
                   border: 'none',
-                  borderRadius: '0px',
+                  borderRadius: '8px',
                   fontWeight: 700,
                   fontSize: '11px',
                   cursor: 'pointer',
@@ -1147,8 +1171,8 @@ function MainApp() {
                   padding: '12px 20px',
                   backgroundColor: 'transparent',
                   color: '#94a3b8',
-                  border: '1px solid #2b3240',
-                  borderRadius: '0px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
                   fontWeight: 700,
                   fontSize: '11px',
                   cursor: 'pointer',
@@ -1171,7 +1195,7 @@ function MainApp() {
           <div style={{
             flex: 1,
             minWidth: '280px',
-            backgroundColor: '#090b0e',
+            backgroundColor: 'var(--bg-main)',
             border: '1px dashed #2b3240',
             padding: '24px',
             display: 'flex',
@@ -1226,11 +1250,11 @@ function MainApp() {
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
-              borderRight: '1px solid #2b3240',
+              borderRight: '1px solid var(--border-color)',
               backgroundColor: '#05070a',
               overflow: 'hidden'
             }}>
-              <div style={{ flex: 1, position: 'relative', borderBottom: '1px solid #2b3240' }}>
+              <div style={{ flex: 1, position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
                 <LiveMap trains={trains} incidents={incidents} />
               </div>
               <div style={{ height: '380px', flexShrink: 0 }}>
@@ -1284,7 +1308,7 @@ function MainApp() {
         return <SimulationView />;
 
       default:
-        return <div  style={{ padding: '24px', fontSize: '12px' }}>[ PAGE NOT DEPLOYED ]</div>;
+        return <div  style={{ padding: '24px', fontSize: '12px' }}>Page Not Deployed</div>;
     }
   };
 
@@ -1301,6 +1325,7 @@ function MainApp() {
         incidentCount={incidentCount} 
         wsStatus={wsStatus} 
         activeTab={activeTab}
+        onSearch={handleSearch}
         onTabChange={(tab) => {
           if (tab === 'Rail Network') {
             setActiveTab('Dashboard');
@@ -1339,7 +1364,7 @@ function MainApp() {
             borderRadius: '50%',
             animation: 'pulse-live 1s infinite'
           }}></span>
-          [ OFFLINE // RE-ESTABLISHING AGENT CONNECTION... ]
+          Offline / Re-establishing connection...
         </div>
       )}
 
@@ -1364,8 +1389,8 @@ function MainApp() {
           backdropFilter: 'blur(8px)'
         }}>
           <div style={{
-            backgroundColor: '#11141a',
-            border: '1px solid #2b3240',
+            backgroundColor: 'var(--bg-panel)',
+            border: '1px solid var(--border-color)',
             borderRadius: '12px',
             padding: '28px',
             width: '440px',
@@ -1434,8 +1459,8 @@ function MainApp() {
           backdropFilter: 'blur(8px)'
         }}>
           <div style={{
-            backgroundColor: '#11141a',
-            border: '1px solid #2b3240',
+            backgroundColor: 'var(--bg-panel)',
+            border: '1px solid var(--border-color)',
             borderRadius: '12px',
             padding: '28px',
             width: '440px',
@@ -1483,8 +1508,8 @@ function MainApp() {
           backdropFilter: 'blur(8px)'
         }}>
           <div style={{
-            backgroundColor: '#11141a',
-            border: '1px solid #2b3240',
+            backgroundColor: 'var(--bg-panel)',
+            border: '1px solid var(--border-color)',
             borderRadius: '12px',
             padding: '32px',
             width: '400px',

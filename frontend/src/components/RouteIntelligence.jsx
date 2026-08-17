@@ -17,14 +17,26 @@ export default function RouteIntelligence({ trains = [] }) {
     setExpandedSectors(next);
   };
 
-  // Dummy / Mock active route data matching Image 2
+  // Use real trains data
+  const trackedTrains = trains.length > 0 ? trains : [];
+  const defaultTrain = trackedTrains.length > 0 ? trackedTrains[0] : null;
+  
+  // Initialize selected train if empty
+  React.useEffect(() => {
+    if (!selectedTrain && defaultTrain) {
+      setSelectedTrain(defaultTrain.train_number);
+    }
+  }, [defaultTrain, selectedTrain]);
+
+  const activeTrainData = trackedTrains.find(t => t.train_number === selectedTrain) || defaultTrain || {};
+  
   const activeRoute = {
-    train: selectedTrain,
-    sector: 'Sector 4',
-    speed: selectedTrain === 'Train 402' ? '112 km/h' : selectedTrain === 'Train 403' ? '98 km/h' : '82 km/h',
-    fuel: selectedTrain === 'Train 402' ? '94.2%' : '88.5%',
-    delayProb: selectedTrain === 'Train 402' ? 14 : 35,
-    confidence: selectedTrain === 'Train 402' ? 88 : 74,
+    train: activeTrainData.train_number || 'Unknown',
+    sector: activeTrainData.source ? `${activeTrainData.source} -> ${activeTrainData.destination}` : 'Sector 4',
+    speed: activeTrainData.speed || (activeTrainData.status === 'on_time' ? '112 km/h' : '82 km/h'),
+    fuel: '94.2%',
+    delayProb: activeTrainData.delay_minutes > 15 ? 85 : 15,
+    confidence: 88,
   };
 
   return (
@@ -69,58 +81,27 @@ export default function RouteIntelligence({ trains = [] }) {
                 
                 {expandedSectors.has('Sector 4') && (
                   <div style={{ paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                    {['Train 402'].map(tr => (
+                    {trackedTrains.map(tr => (
                       <div 
-                        key={tr}
-                        onClick={() => setSelectedTrain(tr)}
+                        key={tr.train_number}
+                        onClick={() => setSelectedTrain(tr.train_number)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', cursor: 'pointer',
-                          backgroundColor: selectedTrain === tr ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
-                          color: selectedTrain === tr ? '#06b6d4' : '#94a3b8',
-                          borderLeft: selectedTrain === tr ? '2px solid #06b6d4' : '2px solid transparent',
+                          backgroundColor: selectedTrain === tr.train_number ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
+                          color: selectedTrain === tr.train_number ? '#06b6d4' : '#94a3b8',
+                          borderLeft: selectedTrain === tr.train_number ? '2px solid #06b6d4' : '2px solid transparent',
                           borderRadius: '4px'
                         }}
                       >
                         <Train size={12} />
-                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>{tr}</span>
+                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>{tr.train_number}</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Sector 5 */}
-              <div>
-                <div 
-                  onClick={() => toggleSector('Sector 5')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '4px 8px', cursor: 'pointer', color: '#94a3b8' }}
-                >
-                  {expandedSectors.has('Sector 5') ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                  <Folder size={12} style={{ color: '#f59e0b' }} />
-                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>Sector 5</span>
-                </div>
-                
-                {expandedSectors.has('Sector 5') && (
-                  <div style={{ paddingLeft: '16px', display: 'flex', flexDirection: 'column', gap: '2px', marginTop: '2px' }}>
-                    {['Train 403', 'Train 404'].map(tr => (
-                      <div 
-                        key={tr}
-                        onClick={() => setSelectedTrain(tr)}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', cursor: 'pointer',
-                          backgroundColor: selectedTrain === tr ? 'rgba(6, 182, 212, 0.08)' : 'transparent',
-                          color: selectedTrain === tr ? '#06b6d4' : '#94a3b8',
-                          borderLeft: selectedTrain === tr ? '2px solid #06b6d4' : '2px solid transparent',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        <Train size={12} />
-                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px' }}>{tr}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                {/* Sector 5 removed for simplicity, we map all trains under one folder for now */}
 
             </div>
           </div>
@@ -278,58 +259,43 @@ export default function RouteIntelligence({ trains = [] }) {
 
             {/* Gantt Row Bars */}
             <div style={{ flex: 1, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
-              
-              {/* Mumbai Block */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }}>
-                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Mumbai</span>
-                </div>
-                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
-                  <div style={{
-                    position: 'absolute', left: '0%', width: '35%', height: '100%',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid #ef4444',
-                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                    borderRadius: '0 4px 4px 0'
-                  }}>
-                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#ef4444', fontWeight: 700 }}>Delayed</span>
-                  </div>
-                </div>
-              </div>
+              {activeTrainData.route_stops && activeTrainData.route_stops.length > 0 ? (
+                activeTrainData.route_stops.map((stop, i) => {
+                  // Determine status logic (mocked visually based on delay)
+                  const isDelayed = activeTrainData.delay_minutes > 15;
+                  const isWarning = activeTrainData.delay_minutes > 0 && activeTrainData.delay_minutes <= 15;
+                  const statusColor = isDelayed ? '#ef4444' : isWarning ? '#f59e0b' : '#10b981';
+                  const statusBg = isDelayed ? 'rgba(239, 68, 68, 0.1)' : isWarning ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)';
+                  const statusText = isDelayed ? 'Delayed' : isWarning ? 'Warning' : 'On Time';
+                  
+                  // Calculate mock position on timeline (0-80%)
+                  const leftPos = Math.min((i / activeTrainData.route_stops.length) * 80, 80);
 
-              {/* Surat Block */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }}>
-                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Surat</span>
+                  return (
+                    <div key={stop.code || i} style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ width: '120px', flexShrink: 0 }}>
+                        <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#e2e8f0' }} title={stop.name}>
+                          {stop.name.length > 15 ? stop.name.substring(0, 15) + '...' : stop.name}
+                        </span>
+                      </div>
+                      <div style={{ flex: 1, position: 'relative', height: '32px' }}>
+                        <div style={{
+                          position: 'absolute', left: `${leftPos}%`, width: '20%', height: '100%',
+                          backgroundColor: statusBg, borderLeft: `4px solid ${statusColor}`,
+                          padding: '0 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                          borderRadius: '0 4px 4px 0'
+                        }}>
+                          <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '11px', color: statusColor, fontWeight: 700 }}>{statusText}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ padding: '20px', color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
+                  No route timeline data available for {activeRoute.train}.
                 </div>
-                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
-                  <div style={{
-                    position: 'absolute', left: '35%', width: '30%', height: '100%',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)', borderLeft: '4px solid #10b981',
-                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                    borderRadius: '0 4px 4px 0'
-                  }}>
-                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#10b981', fontWeight: 700 }}>On Time</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Nagpur Block */}
-              <div style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '100px', flexShrink: 0 }}>
-                  <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#e2e8f0' }}>Nagpur</span>
-                </div>
-                <div style={{ flex: 1, position: 'relative', height: '40px' }}>
-                  <div style={{
-                    position: 'absolute', left: '65%', width: '25%', height: '100%',
-                    backgroundColor: 'rgba(245, 158, 11, 0.1)', borderLeft: '4px solid #f59e0b',
-                    padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center',
-                    borderRadius: '0 4px 4px 0'
-                  }}>
-                    <span style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '12px', color: '#f59e0b', fontWeight: 700 }}>Signal Warning</span>
-                  </div>
-                </div>
-              </div>
-
+              )}
             </div>
           </div>
         </div>

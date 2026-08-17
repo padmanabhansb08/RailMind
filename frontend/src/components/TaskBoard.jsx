@@ -67,15 +67,14 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
     }
 
     return (
-      <span className="palantir-mono" style={{
-        fontSize: '10px',
-        fontWeight: 700,
+      <span style={{
+        fontSize: '11px',
+        fontWeight: 600,
         color: color,
         backgroundColor: bg,
-        padding: '3px 8px',
-        border: `1px solid ${color}40`,
-        borderRadius: '4px',
-        letterSpacing: '0.5px'
+        padding: '4px 10px',
+        borderRadius: '6px',
+        letterSpacing: '0.2px'
       }}>
         {text}
       </span>
@@ -89,13 +88,13 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
         display: 'flex',
         flexDirection: 'column',
         gap: '16px',
-        padding: '20px',
-        borderRight: '1px solid #2b3240',
-        backgroundColor: '#090b0e'
+        padding: '24px 20px',
+        borderRight: '1px solid var(--border-color)',
+        backgroundColor: 'var(--bg-main)'
       }}>
         <h3 style={{
-          fontFamily: "'Outfit', sans-serif",
-          fontSize: '12px',
+          fontFamily: "'Inter', sans-serif",
+          fontSize: '13px',
           fontWeight: 600,
           color: '#cbd5e1',
           letterSpacing: '1px',
@@ -119,26 +118,28 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
               <div
                 key={task.id || task._id}
                 style={{
-                  backgroundColor: '#11141a',
-                  border: '1px solid #2b3240',
-                  borderRadius: '6px',
+                  backgroundColor: 'var(--bg-panel)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
                   padding: '16px',
                   position: 'relative',
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '10px',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#181c24';
-                  e.currentTarget.style.borderColor = '#475569';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-card)';
+                  e.currentTarget.style.borderColor = 'var(--border-color-active)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 12px rgba(0,0,0,0.15)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#11141a';
-                  e.currentTarget.style.borderColor = '#2b3240';
+                  e.currentTarget.style.backgroundColor = 'var(--bg-panel)';
+                  e.currentTarget.style.borderColor = 'var(--border-color)';
                   e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
                 }}
               >
                 {/* Badge & dots */}
@@ -173,14 +174,14 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
                     <AlertTriangle size={16} style={{ color: '#ef4444', flexShrink: 0, marginTop: '2px' }} />
                   )}
                   <span style={{
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
+                    fontFamily: "'Inter', sans-serif",
                     fontSize: '14px',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     lineHeight: '1.4',
-                    color: isResolved ? '#64748b' : '#ffffff',
+                    color: isResolved ? 'var(--text-muted)' : 'var(--text-primary)',
                     textDecoration: isResolved ? 'line-through' : 'none'
                   }}>
-                    {task.task_description || task.description}
+                    {task.title || task.task_description || task.description || "Active Dispatch Task"}
                   </span>
                 </div>
 
@@ -197,9 +198,9 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
                 </span>
                 
                 {/* Details */}
-                <span className="palantir-mono" style={{ 
-                  fontSize: '10px', 
-                  color: '#64748b', 
+                <span style={{ 
+                  fontSize: '11px', 
+                  color: 'var(--text-muted)', 
                   fontWeight: 600,
                   marginTop: '4px'
                 }}>
@@ -208,43 +209,54 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
 
                 {/* Action Buttons */}
                 {!isResolved ? (
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                  <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
                     <button 
                       onClick={() => onResolve && onResolve(task._id || task.id)}
-                      className="palantir-mono"
                       style={{
                         flex: 1,
-                        backgroundColor: '#1e293b',
-                        border: '1px solid #334155',
-                        color: '#f8fafc',
-                        fontSize: '11px',
-                        padding: '8px 0',
+                        backgroundColor: 'var(--accent-color)',
+                        border: '1px solid var(--accent-color)',
+                        color: 'var(--bg-main)',
+                        fontSize: '12px',
+                        padding: '10px 0',
                         cursor: 'pointer',
-                        borderRadius: '4px',
+                        borderRadius: '6px',
                         fontWeight: 600,
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s',
+                        boxShadow: '0 2px 4px rgba(56, 189, 248, 0.2)'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#334155'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1e293b'}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#0284c7'; // Darker blue
+                        e.currentTarget.style.borderColor = '#0284c7';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--accent-color)';
+                        e.currentTarget.style.borderColor = 'var(--accent-color)';
+                      }}
                     >
                       Action
                     </button>
                     <button 
-                      className="palantir-mono"
                       style={{
                         flex: 1,
-                        backgroundColor: '#1e293b',
-                        border: '1px solid #334155',
-                        color: '#f8fafc',
-                        fontSize: '11px',
-                        padding: '8px 0',
+                        backgroundColor: 'transparent',
+                        border: '1px solid var(--border-color-active)',
+                        color: 'var(--text-primary)',
+                        fontSize: '12px',
+                        padding: '10px 0',
                         cursor: 'pointer',
-                        borderRadius: '4px',
-                        fontWeight: 600,
+                        borderRadius: '6px',
+                        fontWeight: 500,
                         transition: 'all 0.2s'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#334155'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#1e293b'}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
+                        e.currentTarget.style.borderColor = 'var(--text-muted)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'var(--border-color-active)';
+                      }}
                     >
                       Assign
                     </button>
@@ -253,16 +265,15 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
                   <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
                     <button 
                       disabled
-                      className="palantir-mono"
                       style={{
                         flex: 1,
-                        backgroundColor: 'rgba(16, 185, 129, 0.05)',
-                        border: '1px solid rgba(16, 185, 129, 0.2)',
-                        color: '#10b981',
-                        fontSize: '11px',
+                        backgroundColor: 'rgba(52, 211, 153, 0.1)',
+                        border: '1px solid rgba(52, 211, 153, 0.2)',
+                        color: 'var(--color-resolved)',
+                        fontSize: '12px',
                         padding: '8px 0',
-                        borderRadius: '4px',
-                        fontWeight: 600,
+                        borderRadius: '6px',
+                        fontWeight: 500,
                         textAlign: 'center'
                       }}
                     >
@@ -280,10 +291,10 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
 
   return (
     <div style={{
-      height: fullScreen ? '100%' : '250px',
-      flex: fullScreen ? 1 : 'none',
-      backgroundColor: '#090b0e',
-      borderTop: '1px solid #2b3240',
+      height: '100%',
+      flex: 1,
+      backgroundColor: 'var(--bg-main)',
+      borderTop: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
       flexShrink: fullScreen ? 1 : 0
@@ -291,28 +302,28 @@ export default function TaskBoard({ tasks = [], onResolve, fullScreen = false })
       {/* Legend & Header */}
       <div style={{
         padding: '12px 24px',
-        borderBottom: '1px solid #2b3240',
+        borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center'
       }}>
-        <h2 className="palantir-mono" style={{ fontSize: '11px', fontWeight: 600, color: '#ffffff', letterSpacing: '1px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>
           Active Operations
         </h2>
         
         {/* Legend */}
         <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '6px', height: '6px', backgroundColor: '#ef4444', borderRadius: '50%' }}></span>
-            <span className="palantir-mono" style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600 }}>[ Urgent ]</span>
+            <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--color-critical)', borderRadius: '50%' }}></span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>Urgent</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '6px', height: '6px', backgroundColor: '#f59e0b', borderRadius: '50%' }}></span>
-            <span className="palantir-mono" style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600 }}>[ Medium ]</span>
+            <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--color-warning)', borderRadius: '50%' }}></span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>Medium</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ width: '6px', height: '6px', backgroundColor: '#10b981', borderRadius: '50%' }}></span>
-            <span className="palantir-mono" style={{ fontSize: '9px', color: '#94a3b8', fontWeight: 600 }}>[ Resolved ]</span>
+            <span style={{ width: '6px', height: '6px', backgroundColor: 'var(--color-resolved)', borderRadius: '50%' }}></span>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 500 }}>Resolved</span>
           </div>
         </div>
       </div>

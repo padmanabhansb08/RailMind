@@ -229,8 +229,8 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
   return (
     <div style={{
       width: '340px',
-      backgroundColor: '#090b0e',
-      borderLeft: '1px solid #2b3240',
+      backgroundColor: 'var(--bg-main)',
+      borderLeft: '1px solid var(--border-color)',
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
@@ -239,15 +239,15 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
       {/* Header */}
       <div style={{
         padding: '20px',
-        borderBottom: '1px solid #2b3240',
+        borderBottom: '1px solid var(--border-color)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: '#090b0e'
+        backgroundColor: 'var(--bg-main)'
       }}>
         <div>
-          <h2 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '13px', fontWeight: 600, color: '#f8fafc', letterSpacing: '1px', margin: 0 }}>
-            LIVE OPERATION ALERTS [{activeCount}]
+          <h2 style={{ fontFamily: "'Inter', sans-serif", fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.5px', margin: 0 }}>
+            Live Operations Feed <span style={{ color: 'var(--text-muted)' }}>({activeCount})</span>
           </h2>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -259,7 +259,7 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
             borderRadius: '50%',
             animation: activeCount > 0 ? 'pulse-live 1.2s infinite' : 'none'
           }}></span>
-          <span className="palantir-mono" style={{ fontSize: '9px', color: '#64748b', fontWeight: 600 }}>TACTICAL FEED</span>
+          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600 }}>Tactical Feed</span>
         </div>
       </div>
 
@@ -273,14 +273,21 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
         gap: '12px'
       }}>
         {incidents.length === 0 ? (
-          <div className="palantir-mono" style={{
-            color: '#5c7080',
-            fontSize: '11px',
+          <div style={{
+            color: 'var(--text-muted)',
+            fontSize: '13px',
             textAlign: 'center',
-            padding: '30px 10px',
-            border: '1px dashed #1a2433'
+            padding: '40px 20px',
+            borderRadius: '8px',
+            border: '1px dashed var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px'
           }}>
-            [ NO ACTIVE OPERATIONS ALERTS RECORDED ]
+            <CheckCircle2 size={32} style={{ color: 'var(--color-resolved)' }} />
+            All clear! No active operations or alerts right now.
           </div>
         ) : (
           incidents.map((incident) => {
@@ -587,19 +594,19 @@ export default function IncidentFeed({ incidents = [], onApprove, onOverride, on
       {/* Bottom Filter & Export Toggle */}
       <div style={{
         padding: '16px',
-        borderTop: '1px solid #2b3240',
+        borderTop: '1px solid var(--border-color)',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        backgroundColor: '#090b0e'
+        backgroundColor: 'var(--bg-main)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>Filters</span>
-          <svg style={{ width: '12px', height: '12px', color: '#94a3b8' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
+          <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Filters</span>
+          <svg style={{ width: '12px', height: '12px', color: 'var(--text-secondary)' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3}><path d="M19 9l-7 7-7-7" /></svg>
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontFamily: "'Outfit', sans-serif", fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Log export</span>
+          <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>Log export</span>
           <label style={{ position: 'relative', display: 'inline-block', width: '32px', height: '18px' }}>
             <input 
               type="checkbox" 

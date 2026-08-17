@@ -26,6 +26,10 @@ twilio_token = os.getenv("TWILIO_AUTH_TOKEN", "mock_token")
 twilio_from = os.getenv("TWILIO_PHONE_NUMBER", "+1234567890")
 twilio_client = TwilioSMSClient(account_sid=twilio_sid, auth_token=twilio_token, from_number=twilio_from)
 
+# Global list of trains tracked by the background agent loop
+# Start empty; populated dynamically via search
+TRACKED_TRAINS = []
+
 # Shared log assistant that prints logs and broadcasts AGENT_LOG & AGENT_STATE_CHANGE WebSocket events
 async def log_agent(node_name: str, message: str):
     print(message)
@@ -62,19 +66,14 @@ async def evaluate_previous_action(state: AgentState) -> AgentState:
         
         # Pre-ingest live train status if raw_train_data is empty (since this node runs first)
         if not state.get("raw_train_data"):
-            train_numbers = [
-                "12301", "12951", "12001", "12259", "12565",
-                "11057", "12627", "12625", "12621", "12615",
-                "12309", "12721", "12229", "12311", "12641"
-            ]
             import time
             start_time = time.time()
             client = railways_client
-            print(f"[RAILMIND] Pre-ingesting Railways API for {len(train_numbers)} trains...")
-            results = await client.get_multiple_trains(train_numbers)
+            print(f"[RAILMIND] Pre-ingesting Railways API for {len(TRACKED_TRAINS)} trains...")
+            results = await client.get_multiple_trains(TRACKED_TRAINS)
             
             train_results = []
-            for tn in train_numbers:
+            for tn in TRACKED_TRAINS:
                 found = False
                 for r in results:
                     if r.get("train_number") == tn:
@@ -161,12 +160,7 @@ async def ingest_node(state: AgentState) -> AgentState:
         else:
             train_numbers = state.get("target_trains")
             if not train_numbers:
-                train_numbers = [
-                    "12301", "12951", "12001", "12259", "12565",
-                    "11057", "12627", "12625", "12621", "12615",
-                    "12309", "12721", "12229", "12311", "12641",
-                    "12438", "ICE"
-                ]
+                train_numbers = TRACKED_TRAINS
             
             import time
             start_time = time.time()
@@ -568,39 +562,31 @@ def generate_mock_json_fallback(prompt: str, state: AgentState) -> dict:
         }
 
 async def call_gemini(prompt: str, state: AgentState = None) -> dict:
-    gemini_key = os.getenv("GEMINI_API_KEY")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-    
+    groq_key = os.getenv("GROQ_API_KEY")
     response_text = None
     
-    # Try Gemini 2.0 Flash first
-    if gemini_key and gemini_key != "mock_key":
+    if groq_key and groq_key != "mock_key":
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=gemini_key)
-            model = genai.GenerativeModel("gemini-2.0-flash")
-            response = await model.generate_content_async(
-                prompt,
-                generation_config={"response_mime_type": "application/json"}
+            from groq import AsyncGroq
+            client = AsyncGroq(api_key=groq_key)
+            response = await client.chat.completions.create(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You must respond ONLY with a valid JSON block matching the requested format."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                model="llama3-8b-8192",
+                response_format={"type": "json_object"},
+                temperature=0.1
             )
-            response_text = response.text
+            response_text = response.choices[0].message.content
         except Exception as e:
-            logger.warning(f"Gemini API call failed: {e}. Trying fallback.")
-            
-    # Try Claude fallback if Gemini failed
-    if not response_text and anthropic_key and anthropic_key != "mock_key":
-        try:
-            from anthropic import AsyncAnthropic
-            client = AsyncAnthropic(api_key=anthropic_key)
-            response = await client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=1000,
-                system="You must respond ONLY with a valid JSON block matching the requested format.",
-                messages=[{"role": "user", "content": prompt}]
-            )
-            response_text = response.content[0].text
-        except Exception as e:
-            logger.warning(f"Claude fallback API call failed: {e}. Using mock fallback.")
+            logger.warning(f"Groq API call failed: {e}. Using mock fallback.")
             
     if response_text:
         try:
@@ -612,7 +598,7 @@ async def call_gemini(prompt: str, state: AgentState = None) -> dict:
             clean_text = clean_text.strip()
             return json.loads(clean_text)
         except Exception as e:
-            logger.warning(f"Failed to parse LLM response as JSON: {e}")
+            logger.warning(f"Failed to parse Groq response as JSON: {e}")
             
     return generate_mock_json_fallback(prompt, state)
 
