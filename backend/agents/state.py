@@ -43,6 +43,13 @@ class AgentState(TypedDict):
     ai_latency_ms: int
     processed_trains: List[str]
     target_trains: List[str]
+    # How many times the reasoner has been attempted this cycle. Bounds the
+    # supervisor's retry when the model returns nothing usable, so a bad
+    # response degrades to the heuristic path instead of spinning the graph.
+    reason_attempts: int
+    # Stages the supervisor has already dispatched in this cycle. A stage that
+    # ran and produced nothing is finished, not something to dispatch again.
+    dispatched: Annotated[List[str], append_to_list]
     errors: Annotated[List[str], append_to_list]
     next_node: str
     last_node_executed: str

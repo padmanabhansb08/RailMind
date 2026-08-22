@@ -116,7 +116,9 @@ async def run_agent_loop_fallback():
                 railways_latency_ms=0,
                 ai_latency_ms=0,
                 processed_trains=processed_trains,
-                target_trains=train_numbers
+                target_trains=train_numbers,
+                reason_attempts=0,
+                dispatched=[]
             )
             thread_id = f"local_bg_{uuid.uuid4().hex[:8]}"
             config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}
@@ -232,7 +234,6 @@ async def get_incidents_api(all: bool = False):
 # REST Endpoint: GET /api/trains - Fetch current train statuses
 @app.get("/api/trains")
 async def get_trains_api():
-    from ..services.railways_api import get_dynamic_position_and_status, RAW_MOCK_TRAINS
     trains = latest_agent_state.get("raw_train_data", [])
     if not trains:
         return []
@@ -262,28 +263,10 @@ async def get_trains_api():
             enriched.append(merged)
             continue
 
-        if train.get("train_number") in RAW_MOCK_TRAINS:
-            dynamic = get_dynamic_position_and_status(train["train_number"])
-
-            # Only a simulated train gets the simulated route. Filling it onto
-            # a live train drew an invented corridor under a real position —
-            # for 12951 that meant a 705 km straight line from Mathura to
-            # Vadodara that matches no actual track. A live train carries the
-            # one segment the feed genuinely knows (current -> next stop).
-            if not merged.get("route_stops") and not has_live_fix:
-                merged["route_stops"] = dynamic.get("route_stops", [])
-
-            if not has_live_fix:
-                merged["lat"] = dynamic.get("lat")
-                merged["lng"] = dynamic.get("lng")
-                merged["position_source"] = "simulated"
-
-            # Leave these absent rather than substituting a plausible number.
-            for field in ("speed", "next_station", "distance_next"):
-                if merged.get(field) in (None, "", "Unknown") and dynamic.get(field) is not None:
-                    merged[field] = dynamic.get(field)
-                    merged.setdefault("simulated_fields", []).append(field)
-
+        # The simulated-position generator this used to fall back on has been
+        # removed, so a record without a live fix is now published as-is with
+        # its position_source left honest rather than filled with an invented
+        # coordinate.
         enriched.append(merged)
     return enriched
 
@@ -676,7 +659,9 @@ async def run_single_agent_iteration(focus_train: str = None):
             railways_latency_ms=0,
             ai_latency_ms=0,
             processed_trains=processed_trains,
-            target_trains=train_numbers
+            target_trains=train_numbers,
+            reason_attempts=0,
+            dispatched=[]
         )
         thread_id = f"sim_trigger_{uuid.uuid4().hex[:8]}"
         config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 20}

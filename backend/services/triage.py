@@ -136,6 +136,8 @@ def build_card(group, now):
             ordered, latest, delay, recurrence, age_minutes, len(dispatches)
         ),
         "reasoning_steps": latest.get("reasoning_steps") or [],
+        "expected_outcome": latest.get("expected_outcome"),
+        "reasoning_source": latest.get("reasoning_source"),
         "confidence_score": latest.get("confidence_score"),
         "memory_used": latest.get("memory_used"),
         "passenger_sms_plan": latest.get("passenger_sms"),

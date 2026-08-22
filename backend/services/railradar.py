@@ -51,13 +51,35 @@ class RailRadarUnavailable(Exception):
     """RailRadar could not be reached or refused the request."""
 
 
+_api_keys = []
+_current_key_idx = 0
+
+def get_api_keys():
+    global _api_keys
+    if not _api_keys:
+        keys_str = os.getenv("RAILRADAR_API_KEYS", "")
+        if keys_str:
+            _api_keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+        else:
+            single_key = os.getenv("RAILRADAR_API_KEY")
+            if single_key:
+                _api_keys = [single_key.strip()]
+    return _api_keys
+
 def api_key():
-    return os.getenv("RAILRADAR_API_KEY")
+    keys = get_api_keys()
+    if not keys:
+        return None
+    global _current_key_idx
+    return keys[_current_key_idx % len(keys)]
 
-
+def rotate_api_key():
+    global _current_key_idx
+    _current_key_idx += 1
+    
 def is_configured():
-    key = api_key()
-    return bool(key) and key.strip().lower() not in {"", "your_key_here", "mock_key"}
+    keys = get_api_keys()
+    return bool(keys) and any(k.strip().lower() not in {"", "your_key_here", "mock_key"} for k in keys)
 
 
 def today_ist():
@@ -66,32 +88,42 @@ def today_ist():
 
 async def _get(path, params=None):
     if not is_configured():
-        raise RailRadarUnavailable("RAILRADAR_API_KEY is not configured.")
+        raise RailRadarUnavailable("RAILRADAR_API_KEYS is not configured.")
 
     url = f"{BASE_URL}{path}"
-    headers = {"Authorization": f"Bearer {api_key()}"}
-    try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-            response = await client.get(url, headers=headers, params=params)
-    except Exception as exc:
-        raise RailRadarUnavailable(f"{type(exc).__name__}: {exc}") from exc
+    
+    keys = get_api_keys()
+    for attempt in range(len(keys)):
+        current_key = api_key()
+        headers = {"Authorization": f"Bearer {current_key}"}
+        try:
+            async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+                response = await client.get(url, headers=headers, params=params)
+        except Exception as exc:
+            raise RailRadarUnavailable(f"{type(exc).__name__}: {exc}") from exc
 
-    if response.status_code == 404:
-        raise TrainNotFound(f"RailRadar has no record for this train.")
-    if response.status_code == 401 or response.status_code == 403:
-        raise RailRadarUnavailable("RailRadar rejected the API key.")
-    if response.status_code == 429:
-        raise RailRadarUnavailable("RailRadar rate limit reached.")
-    if response.status_code != 200:
-        raise RailRadarUnavailable(f"RailRadar returned HTTP {response.status_code}.")
+        if response.status_code in {429, 401, 403}:
+            rotate_api_key()
+            if attempt < len(keys) - 1:
+                continue # try next key
+            if response.status_code == 429:
+                raise RailRadarUnavailable("RailRadar rate limit reached on all keys.")
+            raise RailRadarUnavailable("RailRadar rejected the API keys.")
 
-    payload = response.json()
-    if not payload.get("success"):
-        error = (payload.get("error") or {})
-        if error.get("code") == "TRAIN_NOT_FOUND":
-            raise TrainNotFound(error.get("message", "Train not found"))
-        raise RailRadarUnavailable(error.get("message", "RailRadar request failed."))
-    return payload.get("data") or {}
+        if response.status_code == 404:
+            raise TrainNotFound(f"RailRadar has no record for this train.")
+        if response.status_code != 200:
+            raise RailRadarUnavailable(f"RailRadar returned HTTP {response.status_code}.")
+
+        payload = response.json()
+        if not payload.get("success"):
+            error = (payload.get("error") or {})
+            if error.get("code") == "TRAIN_NOT_FOUND":
+                raise TrainNotFound(error.get("message", "Train not found"))
+            raise RailRadarUnavailable(error.get("message", "RailRadar request failed."))
+        return payload.get("data") or {}
+        
+    raise RailRadarUnavailable("RailRadar API request failed.")
 
 
 def _cached(store, key, ttl):

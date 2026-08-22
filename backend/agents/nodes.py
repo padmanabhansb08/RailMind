@@ -9,7 +9,7 @@ from datetime import datetime
 from ..services.ai_service import reason_with_ai
 from .state import AgentState, TrainAnomaly, DepartmentTask
 from ..services.db_client import db_client
-from ..services.railways_api import get_live_train_status, get_cancelled_trains, mock_train_data, RailwaysAPIClient, get_multiple_trains
+from ..services.railways_api import get_live_train_status, get_cancelled_trains, RailwaysAPIClient, get_multiple_trains
 from ..services.twilio_service import TwilioSMSClient
 from ..api.websocket import websocket_manager
 
@@ -28,7 +28,7 @@ twilio_client = TwilioSMSClient(account_sid=twilio_sid, auth_token=twilio_token,
 
 # Global list of trains tracked by the background agent loop
 # Start empty; populated dynamically via search
-TRACKED_TRAINS = []
+TRACKED_TRAINS = ["12301", "12951", "12001", "12259"]
 
 # Shared log assistant that prints logs and broadcasts AGENT_LOG & AGENT_STATE_CHANGE WebSocket events
 async def log_agent(node_name: str, message: str):
@@ -78,20 +78,15 @@ async def evaluate_previous_action(state: AgentState) -> AgentState:
             print(f"[RAILMIND] Pre-ingesting Railways API for {len(train_numbers)} trains...")
             results = await client.get_multiple_trains(train_numbers)
 
-            train_results = []
-            for tn in train_numbers:
-                found = False
-                for r in results:
-                    if r.get("train_number") == tn:
-                        train_results.append(r)
-                        found = True
-                        break
-                if not found:
-                    from ..services.railways_api import get_mock_rapidapi_train, parse_rapidapi_train_for_agent
-                    mock_data = get_mock_rapidapi_train(tn)
-                    parsed_mock = parse_rapidapi_train_for_agent(mock_data, tn)
-                    if parsed_mock:
-                        train_results.append(parsed_mock)
+            # A train the feed could not serve is simply absent from this
+            # cycle. The generator that used to invent a stand-in record has
+            # been removed, and a fabricated train would be detected, reasoned
+            # over and reported exactly like a real one.
+            by_number = {r.get("train_number"): r for r in results if r.get("train_number")}
+            train_results = [by_number[tn] for tn in train_numbers if tn in by_number]
+            missing = [tn for tn in train_numbers if tn not in by_number]
+            if missing:
+                print(f"[RAILMIND] No live record for {len(missing)} train(s): {', '.join(missing)}")
             
             cancelled = await get_cancelled_trains()
             live_trains = train_results.copy()
@@ -175,22 +170,15 @@ async def ingest_node(state: AgentState) -> AgentState:
             print(f"[RAILMIND] Calling Railways API for {len(train_numbers)} trains...")
             results = await client.get_multiple_trains(train_numbers)
             
-            # Ensure that if some train fetches failed and returned empty dict, they fallback to get_mock_rapidapi_train
-            # So we always have all 15 trains
-            train_results = []
-            for tn in train_numbers:
-                found = False
-                for r in results:
-                    if r.get("train_number") == tn:
-                        train_results.append(r)
-                        found = True
-                        break
-                if not found:
-                    from ..services.railways_api import get_mock_rapidapi_train, parse_rapidapi_train_for_agent
-                    mock_data = get_mock_rapidapi_train(tn)
-                    parsed_mock = parse_rapidapi_train_for_agent(mock_data, tn)
-                    if parsed_mock:
-                        train_results.append(parsed_mock)
+            # A train the feed could not serve is simply absent from this
+            # cycle. The generator that used to invent a stand-in record has
+            # been removed, and a fabricated train would be detected, reasoned
+            # over and reported exactly like a real one.
+            by_number = {r.get("train_number"): r for r in results if r.get("train_number")}
+            train_results = [by_number[tn] for tn in train_numbers if tn in by_number]
+            missing = [tn for tn in train_numbers if tn not in by_number]
+            if missing:
+                print(f"[RAILMIND] No live record for {len(missing)} train(s): {', '.join(missing)}")
             
             results = train_results
             
@@ -204,9 +192,6 @@ async def ingest_node(state: AgentState) -> AgentState:
             if not results:
                 print("[RAILMIND] WARNING: Railways API returned no data, check RAILWAYS_API_KEY in .env")
                 await log_agent("ingest_node", "[RAILMIND] WARNING: Railways API returned no data, check RAILWAYS_API_KEY in .env")
-                results = mock_train_data()
-                print("[RAILMIND] Using mock fallback data")
-                await log_agent("ingest_node", "[RAILMIND] Using mock fallback data")
                 
             cancelled = await get_cancelled_trains()
             live_trains = results.copy()
@@ -356,6 +341,9 @@ async def detect_node(state: AgentState) -> AgentState:
                 logger.error(f"Failed to broadcast CASCADE_ALERT: {ws_e}")
 
         state["anomalies"] = anomalies
+        # The supervisor routes on this. Without it, it kept seeing an unknown
+        # last node and sent the graph back to detection on every hop.
+        state["last_node_executed"] = "detect_node"
         n = len(anomalies)
         if n > 0:
             await log_agent("detect_node", f"[RAILMIND] [WARNING] Detected {n} anomalies")
@@ -371,12 +359,19 @@ async def detect_node(state: AgentState) -> AgentState:
 def get_station_code_from_name(station_name: str) -> str:
     if not station_name:
         return ""
+    import re
+
     name_upper = station_name.upper()
+    words = set(re.findall(r"[A-Z0-9]+", name_upper))
     from ..services.railways_api import STATION_COORDS
     for code, info in STATION_COORDS.items():
-        if info["name"].upper() in name_upper or name_upper in info["name"].upper() or code.upper() in name_upper:
+        # A code has to appear as a whole word. Matching it as a substring made
+        # "KOTA JUNCTION" resolve to JU (Jodhpur), which then drove the cascade
+        # check and the memory lookup off a station the train was nowhere near.
+        if info["name"].upper() in name_upper or name_upper in info["name"].upper() or code.upper() in words:
             return code
-            
+
+
     if "DELHI" in name_upper or "NDLS" in name_upper:
         return "NDLS"
     if "KANPUR" in name_upper or "CNB" in name_upper:
@@ -443,6 +438,7 @@ async def predict_node(state: AgentState) -> AgentState:
         anomalies = state.get("anomalies", [])
         if not anomalies:
             state["prediction"] = {}
+            state["last_node_executed"] = "predict_node"
             return state
             
         predict_prompt = f"""
@@ -466,6 +462,7 @@ async def predict_node(state: AgentState) -> AgentState:
         """
         prediction = await call_gemini(predict_prompt, state)
         state["prediction"] = prediction
+        state["last_node_executed"] = "predict_node"
         
         at_risk = len(prediction.get("at_risk_trains", []))
         await log_agent("PREDICTING", f"{at_risk} trains at risk next 30 mins...")
@@ -509,69 +506,119 @@ async def broadcast_log(stage: str, message: str):
         logger.error(f"Failed to broadcast in broadcast_log: {e}")
 
 def generate_mock_json_fallback(prompt: str, state: AgentState) -> dict:
-    is_prediction = "PREDICT the next 30 minutes" in prompt
-    
+    """Deterministic stand-in used when no reasoning model is reachable.
+
+    It used to return a fixed script about train 12301 rerouting via Allahabad
+    with a hardcoded 0.94 confidence and an invented passenger count, whatever
+    the actual anomaly was. Now every field is derived from the anomaly in
+    hand, and `confidence` is absent rather than fabricated — a derived plan is
+    not a model prediction and should not carry a model's confidence.
+    """
+    from ..services.playbook import build_plan
+
     anomalies = state.get("anomalies", []) if state else []
     anomaly = anomalies[0] if anomalies else {}
-    
-    train_number = anomaly.get("train_number", "12301")
-    train_name = anomaly.get("train_name", "Rajdhani Express")
-    location = anomaly.get("current_station") or anomaly.get("location") or "Kanpur Central"
-    anomaly_type = anomaly.get("anomaly_type", "delay")
-    delay = anomaly.get("delay_minutes", 45)
-    severity = anomaly.get("severity", "medium")
-    
-    if is_prediction:
+    if not anomaly:
+        return {}
+
+    plan = build_plan(anomaly, peers=anomalies[1:])
+    station = anomaly.get("current_station") or anomaly.get("location") or "the reported station"
+    train_number = str(anomaly.get("train_number", ""))
+
+    if "PREDICT the next 30 minutes" in prompt:
+        peers = [a for a in anomalies[1:] if a.get("train_number")]
         return {
-            "at_risk_trains": ["12309", "12259", "12565"],
-            "congestion_stations": ["CNB", "ALD", "NDLS"],
-            "worst_case": "In the next 30 minutes: 3 trains at risk of delay cascade on Delhi-Howrah corridor. Preemptive alerts dispatched to Allahabad and Kanpur stations.",
-            "preemptive_actions": [
-                "Hold non-essential freight traffic at outer signal block cabin of CNB.",
-                "Reroute oncoming express services via secondary chord bypass loop."
-            ],
-            "confidence": 0.94
+            "at_risk_trains": [str(a.get("train_number")) for a in peers][:5],
+            "congestion_stations": sorted({
+                str(a.get("station_code") or a.get("current_station") or "")
+                for a in anomalies if a.get("station_code") or a.get("current_station")
+            })[:5],
+            "worst_case": plan["expected_outcome"] or f"{train_number} stays held at {station}.",
+            "preemptive_actions": [plan["operations_task"], plan["station_manager_task"]],
+            "source": "derived",
+            "about_train": train_number,
         }
 
-    is_perception = "STEP 1 - PERCEIVE" in prompt
-    
-    if is_perception:
+    if "STEP 1 - PERCEIVE" in prompt:
         return {
-            "situation": "Network stress on 2 corridors. Not cascade yet. Individual responses needed.",
-            "is_cascade": False,
-            "affected_corridor": "Delhi-Howrah Corridor",
-            "severity_assessment": "medium"
+            "situation": plan["situation_summary"],
+            "is_cascade": len(anomalies) >= 3,
+            "affected_corridor": station,
+            "severity_assessment": plan["severity"],
+            "source": "derived",
+            "about_train": train_number,
         }
-    else:
-        return {
-            "decision": "Rerouting 12301 via Allahabad. Holding 12625 at Nagpur 8 mins.",
-            "actions": [
-                {
-                    "tool": "reroute_train",
-                    "params": {"train_no": "12301", "via_station": "Allahabad"},
-                    "reason": "Bypass blocked section"
-                },
-                {
-                    "tool": "alert_department",
-                    "params": {"dept": "maintenance", "message": "Platform inspection CNB", "urgency": "critical"},
-                    "reason": "Clear active rail line section"
-                },
-                {
-                    "tool": "hold_train",
-                    "params": {"train_no": "12625", "station": "Nagpur", "duration_mins": 8},
-                    "reason": "spacing safety"
-                }
-            ],
-            "passenger_impact": "847 passengers affected",
-            "estimated_recovery_time": "30 minutes",
-            "confidence": 0.94
-        }
+
+    return {
+        "decision": plan["reroute_plan"],
+        "actions": [
+            {
+                "tool": "alert_department",
+                "params": {"dept": "operations", "train_no": train_number, "message": plan["operations_task"], "urgency": plan["severity"]},
+                "reason": "Pathing and slot allocation are controlled here.",
+            },
+            {
+                "tool": "alert_department",
+                "params": {"dept": "maintenance", "train_no": train_number, "message": plan["maintenance_task"], "urgency": plan["severity"]},
+                "reason": "Rules out an infrastructure cause before the train is released.",
+            },
+            {
+                "tool": "alert_department",
+                "params": {"dept": "station_manager", "train_no": train_number, "message": plan["station_manager_task"], "urgency": plan["severity"]},
+                "reason": "Passengers on the platform need the delay stated.",
+            },
+            {
+                "tool": "send_passenger_alert",
+                "params": {"train_no": train_number, "message": plan["passenger_sms"]},
+                "reason": "Public-facing notice for this service.",
+            },
+        ],
+        "estimated_recovery_time": plan["expected_outcome"],
+        "reasoning_steps": plan["reasoning_steps"],
+        "source": "derived",
+        "about_train": train_number,
+    }
 
 async def call_gemini(prompt: str, state: AgentState = None) -> dict:
-    groq_key = os.getenv("GROQ_API_KEY")
+    """Ask the configured reasoning model for JSON, or derive a plan locally.
+
+    Despite the name this only ever tried Groq, whose SDK is not installed, so
+    every call silently fell through to the canned fallback. It now calls the
+    Gemini REST endpoint directly with GEMINI_API_KEY (no extra dependency),
+    keeps Groq as a secondary if that SDK is present, and marks which path
+    produced the answer so the UI can say whether an operator is reading model
+    output or a derived plan.
+    """
     response_text = None
-    
-    if groq_key and groq_key != "mock_key":
+    source = None
+
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if gemini_key and gemini_key not in ("mock_key", "your_key_here"):
+        model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(
+                    url,
+                    headers={"x-goog-api-key": gemini_key, "Content-Type": "application/json"},
+                    json={
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "generationConfig": {
+                            "temperature": 0.1,
+                            "responseMimeType": "application/json",
+                        },
+                    },
+                )
+                response.raise_for_status()
+                payload = response.json()
+                response_text = payload["candidates"][0]["content"]["parts"][0]["text"]
+                source = "gemini"
+        except Exception as e:
+            logger.warning(f"Gemini call failed: {e}. Falling back.")
+
+    groq_key = os.getenv("GROQ_API_KEY")
+    if not response_text and groq_key and groq_key != "mock_key":
         try:
             from groq import AsyncGroq
             client = AsyncGroq(api_key=groq_key)
@@ -591,9 +638,10 @@ async def call_gemini(prompt: str, state: AgentState = None) -> dict:
                 temperature=0.1
             )
             response_text = response.choices[0].message.content
+            source = "groq"
         except Exception as e:
-            logger.warning(f"Groq API call failed: {e}. Using mock fallback.")
-            
+            logger.warning(f"Groq API call failed: {e}. Using derived plan.")
+
     if response_text:
         try:
             clean_text = response_text.strip()
@@ -601,11 +649,13 @@ async def call_gemini(prompt: str, state: AgentState = None) -> dict:
                 clean_text = clean_text[7:]
             if clean_text.endswith("```"):
                 clean_text = clean_text[:-3]
-            clean_text = clean_text.strip()
-            return json.loads(clean_text)
+            parsed = json.loads(clean_text.strip())
+            if isinstance(parsed, dict):
+                parsed.setdefault("source", source)
+                return parsed
         except Exception as e:
-            logger.warning(f"Failed to parse Groq response as JSON: {e}")
-            
+            logger.warning(f"Failed to parse {source} response as JSON: {e}")
+
     return generate_mock_json_fallback(prompt, state)
 
 async def execute_tool(tool_name: str, params: dict, reason: str, state: AgentState):
@@ -737,6 +787,10 @@ async def execute_tool(tool_name: str, params: dict, reason: str, state: AgentSt
         await log_agent("reason_node", f"[TOOL SUCCESS] Incident escalated to Central Control Room: {summary}")
 
 async def reason_node(state: AgentState) -> AgentState:
+    # Counted before any early return so a reasoner that keeps coming back
+    # empty cannot hold the supervisor in a loop.
+    state["reason_attempts"] = state.get("reason_attempts", 0) + 1
+    state["last_node_executed"] = "reason_node"
     try:
         anomalies = state.get("anomalies", [])
         if not anomalies:
@@ -825,10 +879,10 @@ async def reason_node(state: AgentState) -> AgentState:
         "affected_corridor": "...",
         "severity_assessment": "..."}}
         """
-        await log_agent("THINKING", "Sending to Gemini for perception...")
+        await log_agent("THINKING", "Assessing the situation...")
         perception = await call_gemini(perception_prompt, state)
-        
-        situation = perception.get('situation', 'Network stress on 2 corridors. Not cascade yet. Individual responses needed.')
+
+        situation = perception.get('situation') or "No situation assessment returned."
         await log_agent("PERCEIVED", situation)
         
         # STEP 2: DECIDE - What should be done?
@@ -868,22 +922,41 @@ async def reason_node(state: AgentState) -> AgentState:
             "confidence": 0.0-1.0
         }}
         """
-        await log_agent("DECIDING", "Evaluating 4 possible actions...")
+        await log_agent("DECIDING", "Weighing response options...")
         decision = await call_gemini(decision_prompt, state)
-        
-        confidence = int(decision.get('confidence', 0.94) * 100)
-        decided_msg = decision.get('decision', 'Rerouting 12301 via Allahabad. Holding 12625 at Nagpur 8 mins.')
-        await log_agent("DECIDED", f"Confidence: {confidence}%. {decided_msg}")
-        
+
+        # No invented confidence and no placeholder decision text: a derived
+        # plan carries no model confidence, and saying "94%" over a template
+        # would misrepresent how the answer was reached.
+        confidence = decision.get('confidence')
+        decided_msg = decision.get('decision') or "No decision returned."
+        if confidence is not None:
+            await log_agent("DECIDED", f"Confidence: {int(float(confidence) * 100)}%. {decided_msg}")
+        else:
+            await log_agent("DECIDED", f"{decided_msg} (derived, no model confidence)")
+
         # STEP 3: ACT - Execute decisions
-        actions_count = len(decision.get('actions', [])) or 3
-        await log_agent("ACTING", f"Dispatching to {actions_count} departments...")
+        actions_count = len(decision.get('actions', []))
+        await log_agent("ACTING", f"Dispatching {actions_count} department action(s)...")
         
+        # One malformed tool call must not lose the whole assessment. The model
+        # is free to name a station the route graph has never heard of, and an
+        # unguarded KeyError there previously aborted reason_node and threw away
+        # the perception and decision it had already produced.
         for action in decision.get("actions", []):
-            await execute_tool(action.get("tool"), 
-                              action.get("params", {}), 
-                              action.get("reason", ""),
-                              state)
+            if not isinstance(action, dict):
+                continue
+            try:
+                await execute_tool(action.get("tool"),
+                                   action.get("params", {}) or {},
+                                   action.get("reason", ""),
+                                   state)
+            except Exception as tool_error:
+                logger.warning(f"Tool {action.get('tool')} failed: {tool_error!r}")
+                await log_agent(
+                    "reason_node",
+                    f"[TOOL FAILED] {action.get('tool')} could not be executed: {tool_error!r}"
+                )
         
         state["perception"] = perception
         state["decision"] = decision
@@ -906,48 +979,72 @@ async def reason_node(state: AgentState) -> AgentState:
 from .routing import dijkstra_route_discovery
 
 async def reroute_node(state: AgentState) -> AgentState:
+    """Decide the movement plan for the lead anomaly.
+
+    This node must always come back with a `reroute_plan`. The supervisor routes
+    here whenever that field is empty, and the old version only filled it for
+    one hardcoded case (a train at Kanpur Central with no destination). For
+    every other train it returned nothing, so the supervisor sent it straight
+    back here and the graph span between the two until it hit the recursion
+    limit — which is why cycles never reached the report node.
+    """
     try:
         await log_agent("reroute_node", "[RAILMIND] Checking and resolving rerouting options...")
-        anomalies = state.get("anomalies", [])
-        if anomalies:
-            anomaly = anomalies[0]
-            start_station = anomaly.get("current_station") or anomaly.get("location") or ""
-            target_station = anomaly.get("destination", "")
 
-            # Use fallback destination if none provided
-            if start_station == "Kanpur Central" and not target_station:
-                target_station = "Varanasi"
+        anomalies = dedupe_anomalies(state.get("anomalies", []))
+        if not anomalies:
+            return {
+                "reroute_plan": "No anomaly to route around.",
+                "detour_route": [],
+                "last_node_executed": "reroute_node",
+            }
 
-                # Add geo-coordinate checking for A* or DP route discovery fallback
-                lat = anomaly.get("lat")
-                lng = anomaly.get("lng")
-                await log_agent("reroute_node", f"[RAILMIND] Evaluating geo-coordinates (lat: {lat}, lng: {lng}) for track availability...")
+        anomaly = anomalies[0]
+        start_station = anomaly.get("current_station") or anomaly.get("location") or ""
+        target_station = anomaly.get("destination") or ""
+        train_no = anomaly.get("train_number", "the train")
 
-                # Bypassing the anomaly location
-                blocked = anomaly.get("location") or start_station
-                result = dijkstra_route_discovery(start_station, target_station, blocked_station=blocked)
-                # If path not found due to blockage, try standard routing
-                if result["status"] != "Success":
-                    result = dijkstra_route_discovery(start_station, target_station)
+        # A diversion is only worth proposing when the graph actually knows both
+        # ends of the run. Otherwise the honest answer is priority pathing on
+        # the booked route, which is what the playbook recommends.
+        if start_station and target_station:
+            blocked = anomaly.get("location") or start_station
+            result = dijkstra_route_discovery(start_station, target_station, blocked_station=blocked)
+            if result["status"] != "Success":
+                result = dijkstra_route_discovery(start_station, target_station)
 
-                if result["status"] == "Success":
-                    route_str = " -> ".join(result["route"])
-                    await log_agent("reroute_node", f"[RAILMIND] Dijkstra bypass found: {route_str}")
-                    return {
-                        "reroute_plan": f"Dijkstra detour bypass: {route_str} (ETA {result['cost']} mins)",
-                        "detour_route": result["route"]
-                    }
-                else:
-                    status_msg = result.get("status", "Unknown status")
-                    await log_agent("reroute_node", f"[RAILMIND] No bypass route found: {status_msg}")
-                    return {
-                        "reroute_plan": f"No detour bypass available: {status_msg}",
-                        "detour_route": []
-                    }
+            if result["status"] == "Success" and len(result["route"]) > 1:
+                route_str = " -> ".join(result["route"])
+                await log_agent("reroute_node", f"[RAILMIND] Detour available for {train_no}: {route_str}")
+                return {
+                    "reroute_plan": (
+                        f"Detour available for {train_no}: {route_str} "
+                        f"(about {result['cost']} min on the diverted path). "
+                        f"Use it only if the booked route ahead of {start_station} is blocked."
+                    ),
+                    "detour_route": result["route"],
+                    "last_node_executed": "reroute_node",
+                }
+
+            await log_agent("reroute_node", f"[RAILMIND] No mapped detour for {train_no}: {result.get('status')}")
+
+        from ..services.playbook import build_plan
+        fallback = build_plan(anomaly, peers=anomalies[1:])
+        return {
+            "reroute_plan": fallback["reroute_plan"],
+            "detour_route": [],
+            "last_node_executed": "reroute_node",
+        }
+
     except Exception as e:
         logger.error(f"Error in reroute_node: {e}")
         await log_agent("reroute_node", f"[RAILMIND] [ERROR] Reroute node failed: {e}")
-    return {"detour_route": []}
+    # Even on failure the field must be set, or the supervisor loops back here.
+    return {
+        "reroute_plan": "Routing check failed; handle on the booked route and refer to the section controller.",
+        "detour_route": [],
+        "last_node_executed": "reroute_node",
+    }
 
 async def coordination_node(state: AgentState) -> AgentState:
     try:
@@ -1122,20 +1219,53 @@ async def save_incident_if_not_duplicate(incident):
     print(f"[RAILMIND] New incident saved: {incident['incident_title']}")
     return True
 
+def dedupe_anomalies(anomalies):
+    """One entry per train, keeping the most severe view of it.
+
+    evaluate_previous_action raises escalations for trains that detect_node also
+    flags, and the state reducer appends rather than replaces, so the same train
+    can appear several times in one cycle. Reporting each copy would put
+    duplicate cards in front of an operator.
+    """
+    rank = {"critical": 4, "high": 3, "severe": 3, "medium": 2, "low": 1, "info": 0}
+    best = {}
+    for a in anomalies or []:
+        if not isinstance(a, dict):
+            continue
+        key = str(a.get("train_number") or "unknown")
+        current = best.get(key)
+        if current is None:
+            best[key] = a
+            continue
+        if rank.get(str(a.get("severity", "")).lower(), 0) > rank.get(str(current.get("severity", "")).lower(), 0):
+            best[key] = a
+        elif (a.get("delay_minutes") or 0) > (current.get("delay_minutes") or 0):
+            best[key] = a
+    return list(best.values())
+
+
+# One cycle should not be able to flood the queue faster than an operator can
+# read it. Anything beyond this is picked up by the next cycle.
+MAX_INCIDENTS_PER_CYCLE = 8
+
+
 async def report_node(state: AgentState) -> AgentState:
     try:
         await log_agent("report_node", "[RAILMIND] Broadcasting operations report...")
-        
-        anomalies = state.get("anomalies", [])
+
+        from ..services.playbook import build_plan
+        from ..services.railways_api import SIMULATED_OVERRIDES
+
+        anomalies = dedupe_anomalies(state.get("anomalies", []))
         if not anomalies:
             return {}
-            
-        anomaly = anomalies[0]
-        train_number = anomaly.get("train_number", "Unknown")
-        train_name = anomaly.get("train_name", "Unknown")
-        current_station = anomaly.get("current_station") or anomaly.get("location") or "Unknown"
-        delay_minutes = anomaly.get("delay_minutes", 0)
-        severity = anomaly.get("severity", "medium")
+
+        # An operator-injected train is what someone is watching for, so it is
+        # reported first rather than being cut off by the per-cycle cap.
+        anomalies.sort(key=lambda a: (
+            0 if str(a.get("train_number")) in SIMULATED_OVERRIDES else 1,
+            -(a.get("delay_minutes") or 0),
+        ))
 
         claude_json = state.get("claude_reasoning", "{}")
         try:
@@ -1143,146 +1273,102 @@ async def report_node(state: AgentState) -> AgentState:
         except Exception:
             claude_response = {}
 
-        # Handle nested perception/decision format
-        confidence_score = None
-        reasoning_steps = []
-        situation_summary = ""
-        
-        # Default fallback values for tasks
-        maintenance_task = "Inspect signaling hardware."
-        operations_task = "Execute scheduling adjustments."
-        station_manager_task = "Broadcast delay announcements."
-        passenger_sms = "Check platform screens for status updates."
+        # Model output describes the anomaly the reasoner was given - the first
+        # one. Every other incident in this cycle gets its own derived plan
+        # rather than inheriting text about a different train.
+        primary_number = str(anomalies[0].get("train_number") or "")
 
-        if "perception" in claude_response and "decision" in claude_response:
-            perception = claude_response["perception"]
-            decision = claude_response["decision"]
-            situation_summary = perception.get("situation", "")
-            confidence_score = int(decision.get("confidence", 0) * 100) if decision.get("confidence") is not None else None
-            
-            # Map actions to task text
-            actions = decision.get("actions", [])
-            for action in actions:
-                tool = action.get("tool")
-                reason = action.get("reason", "")
-                params = action.get("params", {})
-                if tool == "alert_department":
-                    dept = params.get("dept", "").lower()
-                    msg = params.get("message", reason)
-                    if "maintenance" in dept:
-                        maintenance_task = msg
-                    elif "operations" in dept:
-                        operations_task = msg
-                    elif "station" in dept or "manager" in dept:
-                        station_manager_task = msg
-                elif tool == "send_passenger_alert":
-                    passenger_sms = params.get("message", reason)
-                elif tool == "reroute_train":
-                    operations_task = f"Reroute train {params.get('train_no')} via {params.get('via_station')}: {reason}"
+        # The reasoner works on whichever anomaly led the list when it ran, which
+        # is not necessarily the train reported first here. Applying its text to
+        # the wrong card produced an incident about a 135 min delay at Itarsi
+        # whose plan, tasks and reasoning all named a different train at a
+        # different station. Only use it on the train it was written about.
+        # reason_node wraps the perception and decision objects, so these markers
+        # sit one level down as often as they sit at the top.
+        def _marker(key):
+            if not isinstance(claude_response, dict):
+                return ""
+            for scope in (claude_response, claude_response.get("perception"), claude_response.get("decision")):
+                if isinstance(scope, dict) and scope.get(key):
+                    return str(scope[key])
+            return ""
 
-            # Create reasoning steps for frontend rendering
-            reasoning_steps = [
-                f"PERCEIVE: {perception.get('situation')}",
-                f"ASSESS: Corridor = {perception.get('affected_corridor')}, Cascade risk = {perception.get('is_cascade')}",
-                f"DECIDE: {decision.get('decision')}",
-                f"ACTION SLOTS: Dispatched {len(actions)} tasks to departments"
-            ]
-        else:
-            situation_summary = claude_response.get("situation_summary") or f"Train {train_number} {train_name} is running {delay_minutes} minutes behind schedule at {current_station}."
-            maintenance_task = claude_response.get("maintenance_task") or "Inspect signaling hardware."
-            operations_task = claude_response.get("operations_task") or "Execute scheduling adjustments."
-            station_manager_task = claude_response.get("station_manager_task") or "Broadcast delay announcements."
-            passenger_sms = claude_response.get("passenger_sms") or "Check platform screens for status updates."
-            confidence_score = claude_response.get("confidence_score")
-            reasoning_steps = claude_response.get("reasoning_steps") or []
+        model_about = _marker("about_train")
+        model_is_derived = _marker("source") == "derived"
+        model_target = model_about or primary_number
+        model_plan = {} if model_is_derived else extract_model_plan(claude_response, model_target)
 
-        # Check for corridor cascade disruption
-        cascade_title = None
         cascade_info = await detect_cascade(anomalies)
         if cascade_info.get("is_cascade"):
-            cascade_title = f"NETWORK EVENT: {cascade_info['corridor']} Corridor Disruption"
-            
-        incident_id = str(uuid4())
+            await log_agent(
+                "report_node",
+                f"[RAILMIND] [CASCADE] {cascade_info.get('message', 'Corridor disruption detected')}"
+            )
 
-        # Construct prediction warning message
-        pred = state.get("prediction", {})
-        worst_case = pred.get("worst_case")
-        if not worst_case:
-            at_risk_count = len(pred.get("at_risk_trains", [])) or 3
-            future_time = "14:30"
-            try:
-                ts_str = state.get("last_api_call") or datetime.utcnow().isoformat()
-                from datetime import timedelta
-                dt = datetime.fromisoformat(str(ts_str))
-                future_dt = dt + timedelta(minutes=30)
-                future_time = future_dt.strftime("%H:%M")
-            except Exception:
-                pass
-            worst_case = f"If unresolved: {at_risk_count} more trains will be delayed by {future_time}"
-        
-        # An operator-injected delay is not live telemetry. Flag it so the
-        # decision queue can say so on the card instead of presenting a
-        # simulated figure as an observed one.
-        from ..services.railways_api import SIMULATED_OVERRIDES
-        is_simulated = str(train_number) in SIMULATED_OVERRIDES
+        processed_trains = list(state.get("processed_trains", []))
+        raised = 0
 
-        incident_report = {
-            "incident_id": incident_id,
-            "simulated": is_simulated,
-            "loop_created": state.get("loop_count", 0),
-            "timestamp": datetime.utcnow().isoformat(),
-            "train_number": train_number,
-            "train_name": train_name,
-            "incident_title": cascade_title or f"{train_number} {train_name} delayed {delay_minutes}min at {current_station}",
-            "current_station": current_station,
-            "delay_minutes": delay_minutes,
-            "severity": severity,
-            "situation_summary": situation_summary,
-            "reroute_plan": state.get("reroute_plan") or "Redirect affected trains via alternate route.",
-            "maintenance_task": maintenance_task,
-            "operations_task": operations_task,
-            "station_manager_task": station_manager_task,
-            "passenger_sms": passenger_sms,
-            "resolution_status": "pending",
-            "departments_notified": ["maintenance", "operations", "station_manager"],
-            "sms_sent": len(state.get("sms_alerts_sent", [])),
-            "detour_route": state.get("detour_route") or [],
-            "confidence_score": confidence_score,
-            "reasoning_steps": reasoning_steps,
-            "passenger_impact": state.get("decision", {}).get("passenger_impact") or "👥 ~2,847 passengers affected",
-            "prediction": worst_case,
-            "memory_used": state.get("memory_used")
-        }
-        # Check for duplicates in last 5 minutes before saving (ISSUE 2)
-        saved = await save_incident_if_not_duplicate(incident_report)
-        if saved:
-            # Broadcast via WebSocket
-            try:
-                await websocket_manager.broadcast(json.dumps({
-                    "type": "INCIDENT_UPDATE",
-                    "data": incident_report
-                }))
-            except Exception as e:
-                logger.error(f"Failed to broadcast incident update: {e}")
+        for anomaly in anomalies[:MAX_INCIDENTS_PER_CYCLE]:
+            train_number = str(anomaly.get("train_number", "Unknown"))
+            train_name = anomaly.get("train_name", "Unknown")
+            current_station = anomaly.get("current_station") or anomaly.get("location") or "Unknown"
+            delay_minutes = anomaly.get("delay_minutes", 0)
+            severity = anomaly.get("severity", "medium")
 
-            await log_agent("LOGGED", f"Incident #RM-{incident_id[:3].upper()} saved to database")
-        else:
-            await log_agent("report_node", f"[RAILMIND] Duplicate incident check: train {train_number} has an active report in the last 5 minutes. Skipping DB insertion and broadcast.")
+            derived = build_plan(anomaly, peers=[a for a in anomalies if a is not anomaly])
+            use_model = bool(model_plan) and train_number == model_target
+            plan = {**derived, **(model_plan if use_model else {})}
 
-        # Mark this train as recently processed in state
-        processed_trains = state.get("processed_trains", [])
-        processed_trains.append(anomaly["train_number"])
+            incident_id = str(uuid4())
+            incident_report = {
+                "incident_id": incident_id,
+                # An injected delay is not live telemetry; the card says so.
+                "simulated": train_number in SIMULATED_OVERRIDES,
+                "reasoning_source": "model" if use_model else "derived",
+                "loop_created": state.get("loop_count", 0),
+                "timestamp": datetime.utcnow().isoformat(),
+                "train_number": train_number,
+                "train_name": train_name,
+                # Always the per-train title. A corridor-wide headline on one
+                # arbitrary train's card described a network event while the
+                # body described a single train, and the two never matched.
+                "incident_title": f"{train_number} {train_name} delayed {delay_minutes}min at {current_station}",
+                "current_station": current_station,
+                "delay_minutes": delay_minutes,
+                "severity": severity,
+                "situation_summary": plan.get("situation_summary"),
+                "reroute_plan": plan.get("reroute_plan"),
+                "maintenance_task": plan.get("maintenance_task"),
+                "operations_task": plan.get("operations_task"),
+                "station_manager_task": plan.get("station_manager_task"),
+                "passenger_sms": plan.get("passenger_sms"),
+                "expected_outcome": plan.get("expected_outcome"),
+                "resolution_status": "pending",
+                "departments_notified": ["maintenance", "operations", "station_manager"],
+                "sms_sent": len(state.get("sms_alerts_sent", [])),
+                "detour_route": state.get("detour_route") or [],
+                "confidence_score": plan.get("confidence_score"),
+                "reasoning_steps": plan.get("reasoning_steps") or [],
+                "memory_used": state.get("memory_used"),
+            }
 
-        # Reset state fields
+            if await save_incident_if_not_duplicate(incident_report):
+                raised += 1
+                try:
+                    await websocket_manager.broadcast(json.dumps({
+                        "type": "INCIDENT_UPDATE",
+                        "data": incident_report
+                    }))
+                except Exception as e:
+                    logger.error(f"Failed to broadcast incident update: {e}")
+                await log_agent("LOGGED", f"Incident #RM-{incident_id[:3].upper()} raised for {train_number} at {current_station}")
+
+            if train_number not in processed_trains:
+                processed_trains.append(train_number)
+
         state["loop_count"] = state.get("loop_count", 0) + 1
         state["next_node"] = "END"
-
-        passengers = state.get("decision", {}).get("passenger_impact", "847 passengers affected")
-        if isinstance(passengers, str):
-            passengers_str = passengers
-        else:
-            passengers_str = f"{passengers} passengers affected"
-        await log_agent("COMPLETE", f"Loop {state.get('loop_count', 0)} done. {passengers_str}. Next scan: 30 seconds.")
+        await log_agent("COMPLETE", f"Cycle {state.get('loop_count', 0)} done. {raised} incident(s) raised from {len(anomalies)} anomalies.")
 
         return {
             "processed_trains": processed_trains,
@@ -1290,7 +1376,9 @@ async def report_node(state: AgentState) -> AgentState:
             "anomalies": ["CLEAR"], # clear anomalies so next run starts fresh
             "sms_alerts_sent": ["CLEAR"],
             "department_tasks": ["CLEAR"],
-            "claude_reasoning": "{}"
+            "claude_reasoning": "{}",
+            "reason_attempts": 0,
+            "dispatched": ["CLEAR"]
         }
 
     except Exception as e:
@@ -1298,10 +1386,128 @@ async def report_node(state: AgentState) -> AgentState:
         await log_agent("report_node", f"[RAILMIND] [ERROR] Report node failed: {e}")
     return {}
 
+
+def action_is_about(action, params, message, train_number):
+    """Whether a model action applies to this train.
+
+    An action naming a different train explicitly is rejected. An action naming
+    no train at all is accepted: general instructions ("prepare the platform")
+    are still useful on the card that triggered them.
+    """
+    import re
+
+    named = str(params.get("train_no") or params.get("train_number") or "").strip()
+    if named:
+        return named == str(train_number)
+
+    mentioned = set(re.findall(r"\d{5}", f"{message or ''} {action.get('reason', '')}"))
+    if not mentioned:
+        return True
+    return str(train_number) in mentioned
+
+
+def extract_model_plan(claude_response, train_number=None):
+    """Pull the usable fields out of a reasoner response, or return {}.
+
+    Only keys the model actually filled in are returned, so they overlay the
+    derived plan instead of blanking it where the model said nothing.
+
+    `train_number` scopes the department actions to one train. The reasoner sees
+    the whole cycle and happily returns an instruction about 12301 alongside one
+    about 12951; without this filter the first incident absorbed all of them and
+    the card told an operator to act on a train it was not about.
+    """
+    if not isinstance(claude_response, dict) or not claude_response:
+        return {}
+
+    plan = {}
+    perception = claude_response.get("perception")
+    decision = claude_response.get("decision")
+
+    if isinstance(perception, dict) and isinstance(decision, dict):
+        if perception.get("situation"):
+            plan["situation_summary"] = perception["situation"]
+        if decision.get("decision"):
+            plan["reroute_plan"] = decision["decision"]
+        if decision.get("estimated_recovery_time"):
+            plan["expected_outcome"] = decision["estimated_recovery_time"]
+
+        confidence = decision.get("confidence")
+        if confidence is not None:
+            try:
+                plan["confidence_score"] = int(float(confidence) * 100)
+            except (TypeError, ValueError):
+                pass
+
+        actions = decision.get("actions", []) or []
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            tool = action.get("tool")
+            params = action.get("params", {}) or {}
+            message = params.get("message") or action.get("reason")
+            if train_number and not action_is_about(action, params, message, train_number):
+                continue
+            if tool == "alert_department" and message:
+                dept = str(params.get("dept", "")).lower()
+                if "maintenance" in dept:
+                    plan["maintenance_task"] = message
+                elif "operations" in dept:
+                    plan["operations_task"] = message
+                elif "station" in dept or "manager" in dept:
+                    plan["station_manager_task"] = message
+            elif tool == "send_passenger_alert" and message:
+                plan["passenger_sms"] = message
+            elif tool == "reroute_train":
+                plan["reroute_plan"] = (
+                    f"Reroute {params.get('train_no')} via {params.get('via_station')}: "
+                    f"{action.get('reason', '')}".strip()
+                )
+
+        steps = decision.get("reasoning_steps") or claude_response.get("reasoning_steps")
+        if steps:
+            plan["reasoning_steps"] = steps
+        elif perception.get("situation") and decision.get("decision"):
+            plan["reasoning_steps"] = [
+                f"Observed: {perception.get('situation')}",
+                f"Assessed: corridor {perception.get('affected_corridor')}, "
+                f"cascade {'yes' if perception.get('is_cascade') else 'no'}.",
+                f"Decided: {decision.get('decision')}",
+                f"Dispatched: {len(actions)} department action(s).",
+            ]
+        return plan
+
+    # Flat shape
+    for key in ("situation_summary", "maintenance_task", "operations_task",
+                "station_manager_task", "passenger_sms", "reroute_plan",
+                "confidence_score", "reasoning_steps"):
+        if claude_response.get(key):
+            plan[key] = claude_response[key]
+    return plan
+
+
 async def supervisor_node(state: AgentState) -> dict:
+    """Dispatch the next stage of the cycle.
+
+    Each stage is dispatched at most once per cycle, recorded in `dispatched`.
+    The previous version re-derived the next stage purely from whether a state
+    field was still empty, so any node that could not fill its field — a reroute
+    with no mapped path, an SMS send against unconfigured Twilio credentials —
+    was dispatched forever until LangGraph hit the recursion limit and the cycle
+    died before reporting anything. A stage that runs and produces nothing is a
+    stage that is finished, not one to retry.
+    """
     try:
         last_node = state.get("last_node_executed")
+        dispatched = set(state.get("dispatched") or [])
         await log_agent("supervisor_node", f"[RAILMIND] Supervisor evaluating graph state... (Last execution: {last_node})")
+
+        def go(node):
+            return {
+                "next_node": node,
+                "last_node_executed": "supervisor_node",
+                "dispatched": [node],
+            }
 
         # Self correction loop check first
         claude_reasoning_raw = state.get("claude_reasoning")
@@ -1316,7 +1522,8 @@ async def supervisor_node(state: AgentState) -> dict:
                         "errors": ["Maintenance task conflicts with active line configurations at Kanpur."],
                         "claude_reasoning": "{}", # clear to force re-reason
                         "next_node": "reason_node",
-                        "last_node_executed": "supervisor_node"
+                        "last_node_executed": "supervisor_node",
+                        "dispatched": ["reason_node"],
                     }
             except json.JSONDecodeError as e:
                 logger.warning("JSON parse failed: %s", e)
@@ -1325,26 +1532,43 @@ async def supervisor_node(state: AgentState) -> dict:
                 raise
 
         anomalies = state.get("anomalies", [])
-        if last_node == "supervisor_node" and (not anomalies or state.get("should_continue") is False):
+
+        # Nothing detected means nothing to report - end rather than loop.
+        if not anomalies and last_node in ("detect_node", "predict_node", "supervisor_node"):
             return {"next_node": "END", "last_node_executed": "supervisor_node"}
 
         # If we just came from ingest, we must go to detect.
-        if not last_node or last_node == "ingest_node" or (last_node == "supervisor_node" and not anomalies):
-             return {"next_node": "detect_node", "last_node_executed": "supervisor_node"}
+        if not last_node or last_node == "ingest_node":
+            return go("detect_node")
 
-        if not state.get("reroute_plan"):
-             return {"next_node": "reroute_node", "last_node_executed": "supervisor_node"}
+        # Reason before acting. This branch was missing entirely: the graph went
+        # straight from detection to rerouting, so claude_reasoning stayed empty
+        # and every incident fell back to canned task text ("Inspect signaling
+        # hardware") no matter what had actually happened. Bounded by
+        # reason_attempts so an unusable model response degrades to the derived
+        # plan instead of looping.
+        reasoning_raw = state.get("claude_reasoning") or "{}"
+        if (anomalies and reasoning_raw.strip() in ("", "{}")
+                and state.get("reason_attempts", 0) < 2):
+            return go("reason_node")
+
+        if not state.get("reroute_plan") and "reroute_node" not in dispatched:
+            return go("reroute_node")
 
         # If tasks not generated
-        if not state.get("department_tasks"):
-            return {"next_node": "coordination_node", "last_node_executed": "supervisor_node"}
+        if not state.get("department_tasks") and "coordination_node" not in dispatched:
+            return go("coordination_node")
 
-        # If alerts not sent
-        if not state.get("sms_alerts_sent") and len(state.get("department_tasks", [])) > 0:
-            return {"next_node": "alert_node", "last_node_executed": "supervisor_node"}
+        # If alerts not sent. Only worth attempting once — a failed send means
+        # the notification channel is down, not that it should be retried until
+        # the cycle dies.
+        if (not state.get("sms_alerts_sent")
+                and len(state.get("department_tasks", [])) > 0
+                and "alert_node" not in dispatched):
+            return go("alert_node")
 
         # Otherwise report and finish
-        return {"next_node": "report_node", "last_node_executed": "supervisor_node"}
+        return go("report_node")
 
     except Exception as e:
          logger.exception("Error in supervisor_node")

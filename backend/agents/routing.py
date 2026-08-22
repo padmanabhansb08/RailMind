@@ -236,7 +236,15 @@ def dijkstra_route_discovery(start: str, target: str, blocked_station: str = Non
             # Bypass blocked station
             if blocked_code and neighbor == blocked_code:
                 continue
-                
+
+            # Some adjacency entries name a station that has no node of its own
+            # in the graph. Indexing `distances` with one raised a KeyError that
+            # propagated out of the reasoning node and discarded a completed
+            # assessment, so a dangling edge is skipped instead.
+            if neighbor not in distances:
+                continue
+
+
             distance = current_dist + weight
             if distance < distances[neighbor]:
                 distances[neighbor] = distance
