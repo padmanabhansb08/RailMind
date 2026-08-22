@@ -666,6 +666,7 @@ async def fetch_all_live_trains() -> list:
     on every single call the cache was built to prevent.
     """
     from .railradar import api_key, is_configured, get_api_keys, rotate_api_key
+    import time
 
     now = time.time()
     if _LIVE_MAP_SNAPSHOT["data"] and now - _LIVE_MAP_SNAPSHOT["timestamp"] < LIVE_MAP_SNAPSHOT_TTL:
