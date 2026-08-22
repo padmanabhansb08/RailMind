@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import LiveMap from './components/LiveMap';
-import IncidentFeed from './components/IncidentFeed';
 import TaskBoard from './components/TaskBoard';
 import RouteIntelligence from './components/RouteIntelligence';
-import { ShieldAlert, AlertTriangle, Info, Check, CornerDownRight, Terminal, RefreshCw, X, Shield, User, HelpCircle, Activity, Bell, Settings } from 'lucide-react';
+import DecisionQueue from './components/DecisionQueue';
+import { API_BASE, statusMeta, formatDuration, useSystemStatus, StatusDot } from './systemStatus';
+import { Terminal, X, Bell } from 'lucide-react';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -72,9 +73,10 @@ function MainApp() {
   const [logs, setLogs] = useState([]);
   
   // Modal Overlay States
-  const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  // Last train the operator searched for, so the map can fly to it.
+  const [focusTrainNumber, setFocusTrainNumber] = useState(null);
+  const [searchError, setSearchError] = useState(null);
 
   const recentIncidentElements = useMemo(() => {
     const result = [];
@@ -103,12 +105,13 @@ function MainApp() {
   }, [incidents]);
 
   const socketRef = useRef(null);
-  const API_BASE = `http://${window.location.hostname}:8000`;
 
   // Fetch functions
   const fetchIncidents = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/incidents`);
+      // all=true: incident history now survives restarts, so the default
+      // 24-hour window would hide everything the decision queue is showing.
+      const res = await fetch(`${API_BASE}/api/incidents?all=true`);
       if (res.ok) {
         const data = await res.json();
         const formatted = data.map(inc => ({
@@ -130,10 +133,24 @@ function MainApp() {
           train_number: inc.train_number || 'Unknown'
         }));
         setIncidents(formatted);
-        setIncidentCount(formatted.length);
       }
     } catch (err) {
       console.error("[API] Failed to fetch incidents:", err);
+    }
+  };
+
+  // The Alerts badge counts open decision cards, read from the same endpoint
+  // the queue renders. Deriving it from a differently-filtered list is what
+  // let the header show 0 while the queue showed 14.
+  const fetchOpenDecisions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/decision-queue`);
+      if (res.ok) {
+        const cards = await res.json();
+        setIncidentCount(cards.filter(c => c.resolution_status === 'pending').length);
+      }
+    } catch (err) {
+      console.error("[API] Failed to fetch open decisions:", err);
     }
   };
 
@@ -161,32 +178,49 @@ function MainApp() {
     }
   };
 
+  // After a decision lands, the task board and incident list are both stale.
+  const refreshAll = () => {
+    fetchIncidents();
+    fetchOpenDecisions();
+    fetchTasks();
+  };
+
+  // A failed search has to say so. Previously the backend invented a train for
+  // any input, and this handler quietly ignored non-OK responses — so a bad
+  // number either produced a fictional train or looked like nothing happened.
   const handleSearch = async (trainNumber) => {
     if (!trainNumber) return;
+    setSearchError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/trains/search?train_number=${trainNumber}`);
-      if (res.ok) {
-        const newTrain = await res.json();
-        if (newTrain && newTrain.train_number) {
-          setTrains(prev => {
-            const exists = prev.find(t => t.train_number === newTrain.train_number);
-            if (exists) {
-              return prev.map(t => t.train_number === newTrain.train_number ? newTrain : t);
-            }
-            return [...prev, newTrain];
-          });
-          // Also set it as selected train by passing it to LiveMap? LiveMap doesn't lift state up.
-          // Wait, LiveMap manages selectedTrainNo internally, but we can't easily set it from App without lifting state.
-          // For now, adding it to the map is step 1.
-        }
+      const res = await fetch(`${API_BASE}/api/trains/search?train_number=${encodeURIComponent(trainNumber)}`);
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setSearchError(body.detail || `Search failed (${res.status})`);
+        return;
       }
-    } catch(err) {
+      if (!body || !body.train_number) {
+        setSearchError(`No train ${trainNumber} found.`);
+        return;
+      }
+
+      setTrains(prev => {
+        const exists = prev.find(t => t.train_number === body.train_number);
+        if (exists) {
+          return prev.map(t => t.train_number === body.train_number ? body : t);
+        }
+        return [...prev, body];
+      });
+      setFocusTrainNumber(body.train_number);
+    } catch (err) {
       console.error("Search failed:", err);
+      setSearchError("Could not reach the RailMind API.");
     }
   };
 
   useEffect(() => {
     fetchIncidents();
+    fetchOpenDecisions();
     fetchTrains();
     fetchTasks();
 
@@ -236,7 +270,7 @@ function MainApp() {
               if (prev.some(inc => inc.id === newIncident.id)) return prev;
               return [newIncident, ...prev];
             });
-            setIncidentCount(prev => prev + 1);
+            fetchOpenDecisions();
             if (report.loop_count !== undefined) {
               setLoopCount(report.loop_count);
             }
@@ -272,43 +306,9 @@ function MainApp() {
     };
   }, []);
 
-  const handleApprove = async (incidentId) => {
-    console.log(`Approving reroute plan for incident: ${incidentId}`);
-    const adminPassword = window.prompt("Enter Admin Password to approve this reroute plan:");
-    if (adminPassword === null) {
-      return; // User cancelled
-    }
-    try {
-      const headers = new Headers();
-      headers.set('Authorization', 'Basic ' + btoa('admin:' + adminPassword));
-      const res = await fetch(`${API_BASE}/api/incidents/${incidentId}/approve`, {
-        method: 'POST',
-        headers: headers
-      });
-      if (res.ok) {
-        setIncidents(prev => prev.map(inc => {
-          if (inc.id === incidentId) {
-            return { ...inc, approved: true };
-          }
-          return inc;
-        }));
-      } else if (res.status === 401) {
-        alert("Incorrect admin password.");
-        console.error("Unauthorized: Incorrect admin password.");
-      } else {
-        console.error("Failed to approve incident reroute plan on backend");
-      }
-    } catch (err) {
-      console.error("Error approving reroute plan:", err);
-    }
-  };
-
-  const handleAcknowledge = (incidentId) => {
-    console.log(`Acknowledging warning incident: ${incidentId}`);
-    setIncidents(prev => prev.filter(inc => inc.id !== incidentId));
-    setIncidentCount(prev => Math.max(0, prev - 1));
-  };
-
+  // Acknowledging is an auditable decision ("a human saw this and chose not to
+  // act"), so it has to reach the server. Remove it optimistically, but put it
+  // back if the write fails rather than silently losing the operator's action.
   const handleResolve = async (taskId) => {
     console.log(`Resolving department task: ${taskId}`);
     try {
@@ -331,195 +331,99 @@ function MainApp() {
   };
 
   // Views Render Functions
-  const IncidentFeedView = () => {
-    const [filter, setFilter] = useState('ALL');
-    const [expandedIncident, setExpandedIncident] = useState(null);
-
-    const filteredIncidents = incidents.filter(inc => {
-      if (filter === 'ALL') return true;
-      return inc.severity?.toUpperCase() === filter;
-    });
-
-    return (
-      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2  style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>ANOMALY COMMAND CENTER</h2>
-            <p  style={{ fontSize: '11px', color: '#64748b' }}>OPERATIONAL ALERTS AUDIT FEED</p>
-          </div>
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--bg-main)', padding: '4px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-            {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: filter === f ? '#06b6d4' : 'transparent',
-                  color: filter === f ? '#05070a' : '#94a3b8',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '10px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {f}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '16px' }}>
-          {filteredIncidents.length === 0 ? (
-            <div  style={{ gridColumn: '1 / -1', padding: '40px', textAlign: 'center', color: '#64748b', backgroundColor: 'var(--bg-main)', border: '1px dashed #2b3240' }}>
-              No anomalies recorded for status: {filter}
-            </div>
-          ) : (
-            filteredIncidents.map(inc => {
-              const isCritical = inc.severity === 'critical';
-              const isWarning = inc.severity === 'warning';
-              const borderColor = isCritical ? '#ef4444' : isWarning ? '#f59e0b' : '#06b6d4';
-
-              return (
-                <div key={inc.id} style={{
-                  backgroundColor: 'var(--bg-panel)',
-                  border: '1px solid var(--border-color)',
-                  borderLeft: `4px solid ${borderColor}`,
-                  borderRadius: '8px',
-                  padding: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span  style={{
-                      fontSize: '9px',
-                      fontWeight: 700,
-                      color: borderColor,
-                      backgroundColor: `${borderColor}0c`,
-                      padding: '3px 8px',
-                      border: `1px solid ${borderColor}`,
-                      textTransform: 'uppercase'
-                    }}>{inc.severity}</span>
-                    <span  style={{ fontSize: '11px', color: '#64748b' }}>{inc.timestamp}</span>
-                  </div>
-
-                  <div>
-                    <h3  style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>{inc.title}</h3>
-                    <p  style={{ fontSize: '11px', color: '#94a3b8', marginTop: '4px' }}>TRAIN: {inc.train_number}</p>
-                  </div>
-
-                  {inc.reroute_plan && (
-                    <div style={{
-                      backgroundColor: 'rgba(0, 240, 255, 0.02)',
-                      border: '1px dashed #2b3240',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px'
-                    }}>
-                      <div  style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '9px', color: '#64748b', fontWeight: 700 }}>
-                        <CornerDownRight size={12} style={{ color: '#06b6d4' }} />
-                        REROUTE PLAN COMMAND
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
-                        <span  style={{ fontSize: '11px', color: '#cbd5e1' }}>{inc.reroute_plan}</span>
-                        {inc.approved ? (
-                          <span  style={{ color: '#10b981', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '2px' }}>
-                            <Check size={12} /> APPROVED
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleApprove(inc.id)}
-                            
-                            style={{
-                              backgroundColor: '#06b6d4',
-                              color: '#05070a',
-                              border: 'none',
-                              borderRadius: '8px',
-                              padding: '4px 10px',
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            APPROVE
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span  style={{ fontSize: '10px', color: '#64748b' }}>
-                      DISPATCH: {inc.departments.join(' // ') || 'NONE'}
-                    </span>
-                    <button
-                      onClick={() => setExpandedIncident(expandedIncident === inc.id ? null : inc.id)}
-                      
-                      style={{
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        color: '#06b6d4',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
-                    >
-                      {expandedIncident === inc.id ? 'HIDE DETAILS' : 'VIEW DETAILS'}
-                    </button>
-                  </div>
-
-                  {expandedIncident === inc.id && (
-                    <div  style={{
-                      backgroundColor: '#05070a',
-                      border: '1px solid var(--border-color)',
-                      padding: '12px',
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                      color: '#94a3b8',
-                      whiteSpace: 'pre-wrap',
-                      marginTop: '4px'
-                    }}>
-                      {inc.description}
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-    );
-  };
-
+  // Every figure here is computed server-side from stored incidents. Where
+  // there is not enough history to compute one, we say so instead of showing
+  // a plausible-looking placeholder.
   const AnalyticsView = () => {
-    const criticalCount = incidents.filter(i => i.severity === 'critical').length;
-    const warningCount = incidents.filter(i => i.severity === 'warning').length;
-    const infoCount = incidents.filter(i => i.severity === 'info').length;
-    const totalCount = incidents.length;
+    const [analytics, setAnalytics] = useState(null);
+    const [analyticsError, setAnalyticsError] = useState(false);
+    const { status, reachable } = useSystemStatus();
 
-    const maxCount = Math.max(criticalCount, warningCount, infoCount, 1);
+    useEffect(() => {
+      let cancelled = false;
+      const load = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/analytics`);
+          if (!res.ok) throw new Error(`Server responded ${res.status}`);
+          const data = await res.json();
+          if (!cancelled) { setAnalytics(data); setAnalyticsError(false); }
+        } catch (err) {
+          console.error("[API] Failed to fetch analytics:", err);
+          if (!cancelled) setAnalyticsError(true);
+        }
+      };
+      load();
+      const timer = setInterval(load, 15000);
+      return () => { cancelled = true; clearInterval(timer); };
+    }, []);
+
+    const severity = analytics?.by_severity || {};
+    const bars = Object.entries(severity)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, count]) => ({
+        name,
+        count,
+        color: name === 'critical' || name === 'high' ? '#ef4444'
+             : name === 'warning' || name === 'medium' ? '#f59e0b'
+             : '#06b6d4'
+      }));
+    const maxCount = Math.max(...bars.map(b => b.count), 1);
+
+    const avgResolution = formatDuration(analytics?.avg_resolution_seconds);
+    const resolvedCount = analytics?.resolved_count ?? 0;
+
+    const tiles = [
+      {
+        label: 'TOTAL INCIDENTS',
+        val: analyticsError ? '—' : (analytics?.total_incidents ?? '…'),
+        color: '#06b6d4',
+        note: analytics ? `stored in ${analytics.store === 'mongodb' ? 'MongoDB' : 'local fallback file'}` : null
+      },
+      {
+        label: 'RESOLVED',
+        val: analyticsError ? '—' : resolvedCount,
+        color: '#10b981',
+        note: analytics ? `${analytics.total_incidents - resolvedCount} still open` : null
+      },
+      {
+        label: 'AGENT CYCLES (THIS SESSION)',
+        val: loopCount,
+        color: '#10b981',
+        note: 'resets when the server restarts'
+      },
+      {
+        label: 'AVG RESOLUTION TIME',
+        val: avgResolution ?? 'No data',
+        color: avgResolution ? '#cbd5e1' : '#64748b',
+        note: avgResolution
+          ? `measured across ${resolvedCount} resolved incident${resolvedCount === 1 ? '' : 's'}`
+          : 'needs at least one resolved incident'
+      }
+    ];
 
     return (
       <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div>
-          <h2  style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>OPERATIONS ANALYTICS</h2>
-          <p  style={{ fontSize: '11px', color: '#64748b' }}>HISTORICAL ANOMALY & AGENT CYCLES TIMELINE</p>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>OPERATIONS ANALYTICS</h2>
+          <p style={{ fontSize: '11px', color: '#64748b' }}>COMPUTED FROM STORED INCIDENT HISTORY</p>
         </div>
+
+        {analyticsError && (
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid #ef4444',
+            borderRadius: '8px',
+            padding: '12px 16px',
+            fontSize: '12px',
+            color: '#fca5a5'
+          }}>
+            Could not reach the analytics endpoint — the figures below are unavailable, not zero.
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-          {[
-            { label: 'TOTAL INCIDENTS', val: totalCount, color: '#06b6d4' },
-            { label: 'CRITICAL ALERTS', val: criticalCount, color: '#ef4444' },
-            { label: 'AGENT COGNITIVE LOOPS', val: loopCount, color: '#10b981' },
-            { label: 'AVG ANOMALY RESOLUTION', val: '4.2 min', color: '#cbd5e1' }
-          ].map((stat, idx) => (
+          {tiles.map((stat, idx) => (
             <div key={idx} style={{
               backgroundColor: 'var(--bg-main)',
               border: '1px solid var(--border-color)',
@@ -527,17 +431,19 @@ function MainApp() {
               padding: '20px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '8px'
+              gap: '6px'
             }}>
-              <span  style={{ fontSize: '9px', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px' }}>{stat.label}</span>
-              <span  style={{ fontSize: '28px', fontWeight: 700, color: stat.color }}>{stat.val}</span>
+              <span style={{ fontSize: '9px', fontWeight: 600, color: '#64748b', letterSpacing: '0.5px' }}>{stat.label}</span>
+              <span style={{ fontSize: '28px', fontWeight: 700, color: stat.color }}>{stat.val}</span>
+              {stat.note && (
+                <span style={{ fontSize: '10px', color: '#64748b' }}>{stat.note}</span>
+              )}
             </div>
           ))}
         </div>
 
         {/* Charts and Data Representation */}
         <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
-          {/* Custom SVG Bar Chart */}
           <div style={{
             flex: 1,
             minWidth: '340px',
@@ -549,29 +455,28 @@ function MainApp() {
             flexDirection: 'column',
             gap: '16px'
           }}>
-            <h3  style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>INCIDENTS BY SEVERITY</h3>
-            <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', height: '180px', paddingTop: '20px' }}>
-              {[
-                { name: 'Critical', count: criticalCount, color: '#ef4444' },
-                { name: 'Warning', count: warningCount, color: '#f59e0b' },
-                { name: 'Info', count: infoCount, color: '#06b6d4' }
-              ].map((bar, idx) => {
-                const heightPercent = (bar.count / maxCount) * 140; // max height 140px
-                return (
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>INCIDENTS BY SEVERITY</h3>
+            {bars.length === 0 ? (
+              <div style={{ color: '#64748b', fontSize: '12px', padding: '40px 0', textAlign: 'center' }}>
+                {analyticsError ? 'Unavailable' : 'No incidents recorded yet'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'flex-end', height: '180px', paddingTop: '20px' }}>
+                {bars.map((bar, idx) => (
                   <div key={idx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '60px' }}>
-                    <span  style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>{bar.count}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>{bar.count}</span>
                     <div style={{
                       width: '32px',
-                      height: `${Math.max(heightPercent, 6)}px`,
+                      height: `${Math.max((bar.count / maxCount) * 140, 6)}px`,
                       backgroundColor: bar.color,
                       borderRadius: '8px',
                       transition: 'height 0.5s ease-out'
                     }}></div>
-                    <span  style={{ fontSize: '10px', color: '#64748b' }}>{bar.name}</span>
+                    <span style={{ fontSize: '10px', color: '#64748b', textTransform: 'capitalize' }}>{bar.name}</span>
                   </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div style={{
@@ -585,56 +490,35 @@ function MainApp() {
             flexDirection: 'column',
             gap: '12px'
           }}>
-            <h3  style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>CORE SYSTEM STATUS REPORT</h3>
-            <div  style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', color: '#cbd5e1', marginTop: '10px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span>Operations Agent State</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span>Primary API Client</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
-                <span>Database Client</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '6px' }}>
-                <span>SMS Alert Dispatcher</span>
-                <span style={{ color: '#10b981', fontWeight: 600 }}>Active</span>
-              </div>
+            <h3 style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc', letterSpacing: '0.5px' }}>LIVE SUBSYSTEM STATUS</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '11px', color: '#cbd5e1', marginTop: '10px' }}>
+              {!reachable && (
+                <div style={{ color: '#ef4444', fontWeight: 600 }}>API unreachable — status unknown.</div>
+              )}
+              {reachable && !status && (
+                <div style={{ color: '#64748b' }}>Probing subsystems…</div>
+              )}
+              {reachable && status?.components?.map((c) => {
+                const meta = statusMeta(c.status);
+                return (
+                  <div key={c.id} style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '12px',
+                    borderBottom: '1px solid var(--border-color)',
+                    paddingBottom: '6px'
+                  }}>
+                    <span title={c.detail} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+                    <span style={{ color: meta.color, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                      <StatusDot status={c.status} />
+                      {meta.label}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </div>
-    );
-  };
-
-  const SupportView = () => {
-    return (
-      <div style={{ padding: '40px', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '20px', color: '#e2e8f0', textAlign: 'center' }}>
-        <div style={{
-          backgroundColor: 'var(--bg-main)',
-          border: '1px solid #06b6d4',
-          boxShadow: '0 0 15px rgba(0, 240, 255, 0.15)',
-          borderRadius: '8px',
-          padding: '40px 60px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: '16px',
-          maxWidth: '560px'
-        }}>
-          <ShieldAlert size={48} style={{ color: '#06b6d4' }} />
-          <h2  style={{ fontSize: '18px', fontWeight: 700, color: '#f8fafc', letterSpacing: '1px' }}>RAILMIND TERMINAL PORTAL</h2>
-          <p  style={{ fontSize: '12px', color: '#94a3b8', lineHeight: '1.6' }}>
-            RailMind SECURE v1.0 — Multi-Agent Railway Cognitive Engine.<br />
-            Secure operations console interface.
-          </p>
-          <div style={{ width: '100%', height: '1px', backgroundColor: '#2b3240', margin: '10px 0' }}></div>
-          <span  style={{ fontSize: '10px', color: '#ef4444', fontWeight: 600, letterSpacing: '0.5px' }}>
-            Authorized Personnel Only
-          </span>
         </div>
       </div>
     );
@@ -722,71 +606,6 @@ function MainApp() {
     );
   };
 
-  const TelemetryView = () => {
-    const [telemetry, setTelemetry] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    const fetchTelemetry = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/telemetry`);
-        if (res.ok) {
-          const data = await res.json();
-          setTelemetry(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch telemetry:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    useEffect(() => {
-      fetchTelemetry();
-      const interval = setInterval(fetchTelemetry, 5000);
-      return () => clearInterval(interval);
-    }, []);
-
-    if (loading && !telemetry) {
-      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>Retrieving Sensor Data...</div>;
-    }
-
-    const metrics = [
-      { name: 'Agent Loop Status', value: telemetry?.agent_loop_status?.toUpperCase() || 'RUNNING', color: '#10b981' },
-      { name: 'Last API Call Check', value: telemetry?.last_api_call || 'Never', color: '#cbd5e1' },
-      { name: 'Indian Railways Latency', value: `${telemetry?.railways_latency_ms || 0} ms`, color: '#06b6d4' },
-      { name: 'AI Cognitive Latency', value: `${telemetry?.ai_latency_ms || 0} ms`, color: '#06b6d4' },
-      { name: 'Live WS Connections', value: telemetry?.websocket_clients || 0, color: '#f59e0b' },
-      { name: 'MongoDB Incident Collections', value: telemetry?.mongodb_incidents || 0, color: '#ef4444' },
-      { name: 'MongoDB Task Collections', value: telemetry?.mongodb_tasks || 0, color: '#ef4444' },
-    ];
-
-    return (
-      <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-        <div>
-          <h2  style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Metrics & Sensor Data</h2>
-          <p  style={{ fontSize: '11px', color: '#64748b' }}>Real-time Hardware & Multi-agent State Data</p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-          {metrics.map((m, idx) => (
-            <div key={idx} style={{
-              backgroundColor: 'var(--bg-main)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '8px'
-            }}>
-              <span  style={{ fontSize: '10px', fontWeight: 600, color: '#64748b' }}>{m.name}</span>
-              <span  style={{ fontSize: '20px', fontWeight: 700, color: m.color, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={m.value}>{m.value}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   const SchedulesView = () => {
     const [scheduleTrains, setScheduleTrains] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -836,7 +655,7 @@ function MainApp() {
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>CORRIDOR ROUTE</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>STATUS</th>
                 <th style={{ padding: '14px 16px', fontWeight: 600 }}>DELAY OFFSET</th>
-                <th style={{ padding: '14px 16px', fontWeight: 600 }}>GPS POSITION</th>
+                <th style={{ padding: '14px 16px', fontWeight: 600 }}>POSITION</th>
               </tr>
             </thead>
             <tbody>
@@ -858,7 +677,12 @@ function MainApp() {
                     <td style={{ padding: '12px 16px', color: isDelayed ? '#f59e0b' : '#64748b' }}>
                       {isDelayed ? `+${train.delay_minutes} min` : '--'}
                     </td>
-                    <td style={{ padding: '12px 16px', color: '#94a3b8' }}>{train.current_station || 'GPS LOSS'}</td>
+                    <td style={{ padding: '12px 16px', color: '#94a3b8' }}>
+                      {train.position_label || train.current_station || 'No position reported'}
+                      {train.position_source === 'simulated' && (
+                        <span style={{ color: '#f59e0b', fontSize: '10px', marginLeft: '6px' }}>(simulated)</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -869,73 +693,91 @@ function MainApp() {
     );
   };
 
+  // System registry. Each row is a live probe result from
+  // backend/services/health.py — nothing here is asserted by the frontend.
   const AssetsView = () => {
-    const [status, setStatus] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const { status, reachable } = useSystemStatus(5000);
 
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/system-status`);
-        if (res.ok) {
-          const data = await res.json();
-          setStatus(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch system status:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    const overall = reachable ? (status?.overall || 'unknown') : 'unknown';
+    const overallMeta = statusMeta(overall);
+    const components = reachable ? (status?.components || []) : [];
 
-    useEffect(() => {
-      fetchStatus();
-    }, []);
-
-    if (loading && !status) {
-      return <div  style={{ padding: '24px', color: '#94a3b8', fontSize: '12px' }}>Connecting to System Fleet...</div>;
-    }
-
-    const services = [
-      { name: 'Core Orchestrator Node', status: status?.agent_status || 'ACTIVE', isConnected: true },
-      { name: 'Cognitive Reasoning Model', status: status?.model || 'GEMINI 2.5 FLASH / CLAUDE', isConnected: true },
-      { name: 'Indian Railways Telemetry API', status: status?.railways_api || 'Disconnected', isConnected: status?.railways_api === 'Connected' },
-      { name: 'Twilio Warning Alert Gateway', status: status?.twilio_sms || 'Disconnected', isConnected: status?.twilio_sms === 'Connected' },
-      { name: 'MongoDB Cloud Collections', status: status?.mongodb || 'Disconnected', isConnected: status?.mongodb === 'Connected' }
+    const contactEntries = [
+      ['MAINTENANCE', status?.contacts?.maintenance],
+      ['OPERATIONS', status?.contacts?.operations],
+      ['STATION MANAGER', status?.contacts?.station_manager]
     ];
 
     return (
       <div style={{ padding: '24px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div>
-          <h2  style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Registry & Fleet</h2>
-          <p  style={{ fontSize: '11px', color: '#64748b' }}>Node Networks & Fleet Status</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#f8fafc' }}>System Registry</h2>
+            <p style={{ fontSize: '11px', color: '#64748b' }}>
+              {status?.checked_at
+                ? `Live probe — last checked ${new Date(status.checked_at).toLocaleTimeString()}`
+                : 'Live probe of every subsystem'}
+            </p>
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            border: `1px solid ${overallMeta.color}`,
+            backgroundColor: `${overallMeta.color}14`
+          }}>
+            <StatusDot status={overall} />
+            <span style={{ fontSize: '12px', fontWeight: 700, color: overallMeta.color }}>
+              {overall === 'ok' ? 'ALL SYSTEMS OPERATIONAL' : `SYSTEM ${overallMeta.label.toUpperCase()}`}
+            </span>
+          </div>
         </div>
+
+        {!reachable && (
+          <div style={{
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid #ef4444',
+            borderRadius: '8px',
+            padding: '14px 18px',
+            fontSize: '12px',
+            color: '#fca5a5'
+          }}>
+            Cannot reach the RailMind API at {API_BASE}. Subsystem states below are unknown — this page will not
+            guess. Check that the backend is running.
+          </div>
+        )}
 
         {/* Connection Cards */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '16px' }}>
-          {services.map((s, idx) => (
-            <div key={idx} style={{
-              backgroundColor: 'var(--bg-main)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span  style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>{s.name}</span>
-                <span style={{
-                  width: '6px',
-                  height: '6px',
-                  backgroundColor: s.isConnected ? '#10b981' : '#ef4444',
-                  boxShadow: s.isConnected ? '0 0 6px #10b981' : '0 0 6px #ef4444'
-                }}></span>
+          {components.map((c) => {
+            const meta = statusMeta(c.status);
+            return (
+              <div key={c.id} style={{
+                backgroundColor: 'var(--bg-main)',
+                border: '1px solid var(--border-color)',
+                borderLeft: `3px solid ${meta.color}`,
+                borderRadius: '8px',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '10px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#f8fafc' }}>{c.name}</span>
+                  <StatusDot status={c.status} />
+                </div>
+                <span style={{ fontSize: '13px', color: meta.color, fontWeight: 700 }}>
+                  {meta.label.toUpperCase()}
+                  {c.latency_ms != null && (
+                    <span style={{ color: '#64748b', fontWeight: 500 }}> · {c.latency_ms} ms</span>
+                  )}
+                </span>
+                <span style={{ fontSize: '11px', color: '#94a3b8', lineHeight: 1.5 }}>{c.detail}</span>
               </div>
-              <span  style={{ fontSize: '13px', color: s.isConnected ? '#10b981' : '#ef4444', fontWeight: 700 }}>
-                [ {s.status.toUpperCase()} ]
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Contacts Section */}
@@ -948,20 +790,16 @@ function MainApp() {
           flexDirection: 'column',
           gap: '16px'
         }}>
-          <h3  style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>NODE DISPATCH CONTACTS REGISTRY</h3>
+          <h3 style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>DISPATCH CONTACTS</h3>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span  style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>MAINTENANCE COORDINATES</span>
-              <span  style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: 500 }}>{status?.contacts?.maintenance || 'MOCK_GATEWAY'}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span  style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>OPERATIONS CONTROLLERS</span>
-              <span  style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: 500 }}>{status?.contacts?.operations || 'MOCK_GATEWAY'}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span  style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>STATION MANAGERS DESK</span>
-              <span  style={{ fontSize: '13px', color: '#cbd5e1', fontWeight: 500 }}>{status?.contacts?.station_manager || 'MOCK_GATEWAY'}</span>
-            </div>
+            {contactEntries.map(([label, number]) => (
+              <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <span style={{ fontSize: '10px', color: '#64748b', fontWeight: 600 }}>{label}</span>
+                <span style={{ fontSize: '13px', color: number ? '#cbd5e1' : '#64748b', fontWeight: 500 }}>
+                  {number || 'Not configured'}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1236,48 +1074,42 @@ function MainApp() {
 
   const renderContent = () => {
     switch (activeTab) {
+      // The queue leads. An operator opening this should see what needs them
+      // before they see anything else; the map and task board are context for
+      // the decision, not the main event.
+      // Overview is map + task board. The decision queue lives on its own tab
+      // (Incident Alerts) rather than competing with the map for width here.
       case 'Dashboard':
         return (
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: 'minmax(0, 1fr) auto', 
-            gridTemplateRows: '100%',
-            flex: 1, 
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: 1,
             overflow: 'hidden',
             backgroundColor: '#05070a'
           }}>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              flex: 1,
-              borderRight: '1px solid var(--border-color)',
-              backgroundColor: '#05070a',
-              overflow: 'hidden'
-            }}>
-              <div style={{ flex: 1, position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
-                <LiveMap trains={trains} incidents={incidents} />
-              </div>
-              <div style={{ height: '380px', flexShrink: 0 }}>
-                <TaskBoard tasks={tasks} onResolve={handleResolve} />
-              </div>
+            <div style={{ flex: 1, position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
+              <LiveMap trains={trains} incidents={incidents} focusTrainNumber={focusTrainNumber} />
             </div>
-            <IncidentFeed 
-              incidents={incidents} 
-              onApprove={handleApprove}
-              onAcknowledge={handleAcknowledge}
-            />
+            <div style={{ height: '340px', flexShrink: 0 }}>
+              <TaskBoard tasks={tasks} onResolve={handleResolve} />
+            </div>
           </div>
         );
 
       case 'Live Map':
         return (
           <div style={{ flex: 1, position: 'relative', height: '100%' }}>
-            <LiveMap trains={trains} incidents={incidents} />
+            <LiveMap trains={trains} incidents={incidents} focusTrainNumber={focusTrainNumber} />
           </div>
         );
 
       case 'Incident Feed':
-        return <IncidentFeedView />;
+        return (
+          <div style={{ flex: 1, height: '100%', overflow: 'hidden' }}>
+            <DecisionQueue refreshKey={incidents.length} onDecided={refreshAll} />
+          </div>
+        );
 
       case 'Task Board':
         return (
@@ -1289,8 +1121,6 @@ function MainApp() {
       case 'Analytics':
         return <AnalyticsView />;
 
-      case 'Support':
-        return <SupportView />;
 
       case 'Logs':
         return <LogsView logs={logs} onClear={() => setLogs([])} />;
@@ -1326,6 +1156,8 @@ function MainApp() {
         wsStatus={wsStatus} 
         activeTab={activeTab}
         onSearch={handleSearch}
+        searchError={searchError}
+        onDismissSearchError={() => setSearchError(null)}
         onTabChange={(tab) => {
           if (tab === 'Rail Network') {
             setActiveTab('Dashboard');
@@ -1333,9 +1165,7 @@ function MainApp() {
             setActiveTab(tab);
           }
         }}
-        onSettingsClick={() => setShowSettings(true)}
         onNotificationsClick={() => setShowNotifications(true)}
-        onProfileClick={() => setShowProfile(true)}
       />
 
       {wsStatus === 'reconnecting' && (
@@ -1372,76 +1202,6 @@ function MainApp() {
         <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
         {renderContent()}
       </div>
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(5, 7, 10, 0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-panel)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '12px',
-            padding: '28px',
-            width: '440px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '20px',
-            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '16px', fontWeight: 600, color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Settings size={18} style={{ color: '#94a3b8' }} />
-                System Configuration
-              </h3>
-              <button onClick={() => setShowSettings(false)} style={{ backgroundColor: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>
-                <X size={18} />
-              </button>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#cbd5e1' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input type="checkbox" defaultChecked style={{ accentColor: '#10b981', width: '16px', height: '16px' }} /> Allow Cognitive Rerouting Dispatch
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input type="checkbox" defaultChecked style={{ accentColor: '#10b981', width: '16px', height: '16px' }} /> Telemetry Cache / Database Fallback
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}>
-                <input type="checkbox" defaultChecked style={{ accentColor: '#10b981', width: '16px', height: '16px' }} /> Enable Real-Time WS Streaming
-              </label>
-            </div>
-
-            <button
-              onClick={() => setShowSettings(false)}
-              style={{
-                marginTop: '4px',
-                padding: '10px 20px',
-                backgroundColor: '#ffffff',
-                color: '#05070a',
-                border: 'none',
-                borderRadius: '8px',
-                fontWeight: 700,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                fontSize: '13px',
-                cursor: 'pointer',
-                transition: 'opacity 0.2s'
-              }}
-            >
-              Save Configuration
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Notifications Modal */}
       {showNotifications && (
@@ -1487,76 +1247,6 @@ function MainApp() {
                   No system alerts recorded.
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Profile Modal */}
-      {showProfile && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(5, 7, 10, 0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            backgroundColor: 'var(--bg-panel)',
-            border: '1px solid var(--border-color)',
-            borderRadius: '12px',
-            padding: '32px',
-            width: '400px',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: '20px',
-            textAlign: 'center',
-            boxShadow: '0 24px 64px rgba(0, 0, 0, 0.5)'
-          }}>
-            <div style={{ alignSelf: 'stretch', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowProfile(false)} style={{ backgroundColor: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer', padding: '4px' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              overflow: 'hidden',
-              border: '2px solid #2b3240',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)'
-            }}>
-              <img 
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80" 
-                alt="User profile" 
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </div>
-
-            <div>
-              <h3 style={{ fontFamily: "'Outfit', sans-serif", fontSize: '18px', fontWeight: 700, color: '#f8fafc' }}>Shreyam</h3>
-              <p style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", fontSize: '13px', color: '#94a3b8', fontWeight: 500, marginTop: '4px' }}>Chief Operations Manager</p>
-            </div>
-
-            <div style={{ width: '100%', height: '1px', backgroundColor: '#2b3240' }}></div>
-
-            <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", alignSelf: 'stretch', display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '13px', color: '#cbd5e1' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Terminal</span>
-                <span>SEC-NODE-ALPHA</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: '#64748b' }}>Authorization</span>
-                <span style={{ color: '#f59e0b', fontWeight: 600 }}>Level 5</span>
-              </div>
             </div>
           </div>
         </div>

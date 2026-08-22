@@ -16,8 +16,12 @@ load_dotenv(dotenv_path=env_path)
 
 # Real MongoDB Atlas Connection for RailMind
 MONGODB_URI = os.getenv("MONGODB_URI")
-client = AsyncIOMotorClient(MONGODB_URI, maxPoolSize=50)
-db = client["railmind"]
+if MONGODB_URI:
+    client = AsyncIOMotorClient(MONGODB_URI, maxPoolSize=50)
+    db = client["railmind"]
+else:
+    client = None
+    db = None
 
 # Collections needed:
 # - db["incidents"] — for incident reports
@@ -60,15 +64,28 @@ def get_station_code(station_name: str) -> str:
         return "ASR"
     return station_name[:4].upper()
 
+def fallback_task_id(task):
+    """Stable unique id for a task in the JSON store.
+
+    Fallback tasks carry no document id of their own, and one incident emits
+    one task per department — so incident_id is shared by three rows. Keying on
+    it made React collapse them into one card and made resolving any single
+    task silently resolve the other two.
+    """
+    return f"{task.get('incident_id')}:{task.get('department')}"
+
+
 class FallbackDB:
     def __init__(self):
         self.client = client
         self.db = db
-        self.use_fallback = False
+        self.use_fallback = (client is None)
         self.fallback_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fallback_db.json")
         self._lock = asyncio.Lock()
 
     async def init_indexes(self):
+        if self.db is None:
+            return
         try:
             # Create a 2dsphere index for geospatial locations if applicable, or just compound
             await self.db["incidents"].create_index([("train_number", ASCENDING), ("timestamp", DESCENDING)], unique=True)
@@ -220,7 +237,10 @@ class FallbackDB:
                 tasks = await cursor.to_list(length=100)
                 for t in tasks:
                     t["_id"] = str(t["_id"])
-                    t["id"] = t.get("incident_id") or str(t["_id"])
+                    # One incident produces several tasks (maintenance,
+                    # operations, station manager), so incident_id alone is not
+                    # unique — the document id is what identifies a task.
+                    t["id"] = str(t["_id"])
                 return tasks
             except Exception as e:
                 logger.warning(f"MongoDB get_pending_department_tasks failed: {e}. Falling back.")
@@ -232,8 +252,7 @@ class FallbackDB:
             pending = []
             for t in data["department_tasks"]:
                 if t.get("status") == "pending":
-                    if "id" not in t:
-                        t["id"] = t.get("incident_id") or str(t.get("_id"))
+                    t["id"] = fallback_task_id(t)
                     pending.append(t)
             return pending
 
@@ -253,14 +272,22 @@ class FallbackDB:
                 self.use_fallback = True
                 
         # Fallback
+        #
+        # A composite "incident:department" id resolves exactly one task. A
+        # bare incident id is still accepted and resolves that incident's whole
+        # set, which is what older callers expected.
         async with self._lock:
             data = await self._read_fallback()
             modified_count = 0
             for t in data["department_tasks"]:
-                if t.get("incident_id") == task_id or t.get("id") == task_id or str(t.get("_id")) == task_id or t.get("_id") == task_id:
-                    if t.get("status") != "resolved":
-                        t["status"] = "resolved"
-                        modified_count += 1
+                matches = (
+                    fallback_task_id(t) == task_id
+                    or str(t.get("_id")) == task_id
+                    or (":" not in str(task_id) and t.get("incident_id") == task_id)
+                )
+                if matches and t.get("status") != "resolved":
+                    t["status"] = "resolved"
+                    modified_count += 1
             if modified_count > 0:
                 await self._write_fallback(data)
             return modified_count
@@ -310,16 +337,19 @@ class FallbackDB:
                 except Exception:
                     pass
                 
-                pattern = f"Train {train_number} is frequently delayed at {station_code} between {time_str}"
-                effectiveness = f"{reroute_plan} recovered avg 18 mins for {station_code} delays"
-                escalations = f"{train_number} needed escalation 2x this week"
-                
+                # Record only what actually happened. Anything inferred beyond
+                # this (recurrence rates, minutes recovered, escalation counts)
+                # would be invented, and memories are replayed into the model's
+                # context on later incidents — so a fabrication here becomes a
+                # false premise for every future decision at this station.
                 memory_item = {
                     "train_number": train_number,
                     "station_code": station_code,
-                    "pattern": pattern,
-                    "effectiveness": effectiveness,
-                    "escalations": escalations,
+                    "outcome": "approved",
+                    "delay_minutes": incident.get("delay_minutes"),
+                    "severity": incident.get("severity"),
+                    "time_window": time_str,
+                    "plan_applied": reroute_plan,
                     "timestamp": datetime.utcnow().isoformat()
                 }
                 await self.save_memory(memory_item)
@@ -335,7 +365,10 @@ class FallbackDB:
                     query = {"_id": ObjectId(incident_id)}
                 except Exception:
                     query = {"incident_id": incident_id}
-                result = await self.db["incidents"].update_many(query, {"$set": {"resolution_status": "approved"}})
+                result = await self.db["incidents"].update_many(query, {"$set": {
+                    "resolution_status": "approved",
+                    "resolved_at": datetime.utcnow().isoformat()
+                }})
                 return result.modified_count
             except Exception as e:
                 logger.warning(f"MongoDB approve_incident failed: {e}. Falling back.")
@@ -349,6 +382,7 @@ class FallbackDB:
                 if inc.get("incident_id") == incident_id or str(inc.get("_id")) == incident_id or inc.get("_id") == incident_id:
                     if inc.get("resolution_status") != "approved":
                         inc["resolution_status"] = "approved"
+                        inc["resolved_at"] = datetime.utcnow().isoformat()
                         modified_count += 1
             if modified_count > 0:
                 await self._write_fallback(data)
@@ -398,16 +432,18 @@ class FallbackDB:
                 except Exception:
                     pass
                 
-                pattern = f"Train {train_number} is frequently delayed at {station_code} between {time_str}"
-                effectiveness = f"Human Override ({custom_decision}) executed"
-                escalations = f"{train_number} needed escalation 2x this week"
-                
+                # An override is the highest-signal memory we have: a human
+                # rejected the generated plan and substituted their own. Record
+                # both so the contrast is visible on replay.
                 memory_item = {
                     "train_number": train_number,
                     "station_code": station_code,
-                    "pattern": pattern,
-                    "effectiveness": effectiveness,
-                    "escalations": escalations,
+                    "outcome": "overridden_by_operator",
+                    "delay_minutes": incident.get("delay_minutes"),
+                    "severity": incident.get("severity"),
+                    "time_window": time_str,
+                    "plan_proposed": incident.get("reroute_plan"),
+                    "plan_applied": custom_decision,
                     "timestamp": datetime.utcnow().isoformat()
                 }
                 await self.save_memory(memory_item)
@@ -424,8 +460,9 @@ class FallbackDB:
                 except Exception:
                     query = {"incident_id": incident_id}
                 result = await self.db["incidents"].update_many(query, {"$set": {
-                    "resolution_status": "approved",
-                    "reroute_plan": custom_decision
+                    "resolution_status": "overridden",
+                    "reroute_plan": custom_decision,
+                    "resolved_at": datetime.utcnow().isoformat()
                 }})
                 return result.modified_count
             except Exception as e:
@@ -438,13 +475,162 @@ class FallbackDB:
             modified_count = 0
             for inc in data["incidents"]:
                 if inc.get("incident_id") == incident_id or str(inc.get("_id")) == incident_id or inc.get("_id") == incident_id:
-                    inc["resolution_status"] = "approved"
+                    inc["resolution_status"] = "overridden"
                     inc["reroute_plan"] = custom_decision
+                    inc["resolved_at"] = datetime.utcnow().isoformat()
                     modified_count += 1
             if modified_count > 0:
                 await self._write_fallback(data)
             return modified_count
 
+
+    async def acknowledge_incident(self, incident_id):
+        """Mark an incident as seen and dismissed by an operator.
+
+        Distinct from approval: acknowledging a warning records that a human
+        looked at it and chose not to act, which is itself an auditable
+        decision. Previously the frontend dropped these from local state only,
+        so the dismissal vanished on refresh.
+        """
+        now = datetime.utcnow().isoformat()
+        if not self.use_fallback:
+            try:
+                from bson import ObjectId
+                try:
+                    query = {"_id": ObjectId(incident_id)}
+                except Exception:
+                    query = {"incident_id": incident_id}
+                result = await self.db["incidents"].update_many(query, {"$set": {
+                    "resolution_status": "acknowledged",
+                    "resolved_at": now
+                }})
+                return result.modified_count
+            except Exception as e:
+                logger.warning(f"MongoDB acknowledge_incident failed: {e}. Falling back.")
+                self.use_fallback = True
+
+        async with self._lock:
+            data = await self._read_fallback()
+            modified_count = 0
+            for inc in data["incidents"]:
+                if inc.get("incident_id") == incident_id or str(inc.get("_id")) == incident_id or inc.get("_id") == incident_id:
+                    if inc.get("resolution_status") != "acknowledged":
+                        inc["resolution_status"] = "acknowledged"
+                        inc["resolved_at"] = now
+                        modified_count += 1
+            if modified_count > 0:
+                await self._write_fallback(data)
+            return modified_count
+
+    async def record_decision(self, incident_id, action, actor="operator", reason=None, plan=None):
+        """Apply an operator decision and append it to the incident's audit trail.
+
+        One path for every decision (approve / reject / modify / acknowledge /
+        undo) so nothing can change an incident's status without leaving a
+        record of who did it and why. `undo` returns the incident to pending
+        but keeps the history — reversing a decision is itself a decision.
+        """
+        now = datetime.utcnow().isoformat()
+
+        status_for_action = {
+            "approve": "approved",
+            "modify": "overridden",
+            "reject": "rejected",
+            "acknowledge": "acknowledged",
+            "undo": "pending",
+        }
+        if action not in status_for_action:
+            raise ValueError(f"Unknown decision action: {action}")
+
+        new_status = status_for_action[action]
+        entry = {"action": action, "actor": actor, "at": now}
+        if reason:
+            entry["reason"] = reason
+        if plan:
+            entry["plan"] = plan
+
+        update = {"resolution_status": new_status}
+        if action == "undo":
+            update["resolved_at"] = None
+        else:
+            update["resolved_at"] = now
+        if action == "modify" and plan:
+            update["reroute_plan"] = plan
+
+        if not self.use_fallback:
+            try:
+                from bson import ObjectId
+                try:
+                    query = {"_id": ObjectId(incident_id)}
+                except Exception:
+                    query = {"incident_id": incident_id}
+                result = await self.db["incidents"].update_many(
+                    query, {"$set": update, "$push": {"decisions": entry}}
+                )
+                return result.modified_count
+            except Exception as e:
+                logger.warning(f"MongoDB record_decision failed: {e}. Falling back.")
+                self.use_fallback = True
+
+        async with self._lock:
+            data = await self._read_fallback()
+            modified_count = 0
+            for inc in data["incidents"]:
+                if inc.get("incident_id") == incident_id or str(inc.get("_id")) == incident_id or inc.get("_id") == incident_id:
+                    inc.update(update)
+                    inc.setdefault("decisions", []).append(entry)
+                    modified_count += 1
+            if modified_count > 0:
+                await self._write_fallback(data)
+            return modified_count
+
+    async def get_analytics(self):
+        """Compute dashboard figures from stored incidents.
+
+        Every number returned here is derived from records on disk. Where
+        there is not enough data to compute a figure, the field is None and
+        the caller is expected to say so rather than substitute a plausible
+        placeholder.
+        """
+        incidents = await self.get_incidents(limit=1000)
+
+        by_severity = {}
+        by_status = {}
+        durations = []
+
+        for inc in incidents:
+            severity = (inc.get("severity") or "info").lower()
+            by_severity[severity] = by_severity.get(severity, 0) + 1
+
+            status = (inc.get("resolution_status") or "pending").lower()
+            by_status[status] = by_status.get(status, 0) + 1
+
+            raised, resolved = inc.get("timestamp"), inc.get("resolved_at")
+            if not raised or not resolved:
+                continue
+            try:
+                start = raised if isinstance(raised, datetime) else datetime.fromisoformat(str(raised).replace("Z", "+00:00"))
+                end = resolved if isinstance(resolved, datetime) else datetime.fromisoformat(str(resolved).replace("Z", "+00:00"))
+                if start.tzinfo is not None:
+                    start = start.replace(tzinfo=None)
+                if end.tzinfo is not None:
+                    end = end.replace(tzinfo=None)
+                seconds = (end - start).total_seconds()
+                if seconds >= 0:
+                    durations.append(seconds)
+            except Exception:
+                continue
+
+        avg_resolution_seconds = round(sum(durations) / len(durations)) if durations else None
+
+        return {
+            "total_incidents": len(incidents),
+            "by_severity": by_severity,
+            "by_status": by_status,
+            "resolved_count": len(durations),
+            "avg_resolution_seconds": avg_resolution_seconds,
+            "store": "fallback_file" if self.use_fallback else "mongodb"
+        }
 
     async def save_memory(self, memory_item):
         if not self.use_fallback:

@@ -32,8 +32,14 @@ workflow.add_edge("ingest_node", "detect_node")
 workflow.add_edge("detect_node", "predict_node")
 workflow.add_edge("predict_node", "supervisor_node")
 
-# All worker nodes return back to the supervisor
-workflow.add_edge("detect_node", "supervisor_node")
+# All worker nodes return back to the supervisor.
+#
+# detect_node deliberately has NO edge here: it already reaches the supervisor
+# through predict_node. Adding a second edge made detect_node fan out to two
+# branches at once, both of which eventually wrote `next_node` in the same
+# superstep, and LangGraph aborted the whole run with
+# INVALID_CONCURRENT_GRAPH_UPDATE — so no cycle ever reached report_node and no
+# incident was ever written.
 workflow.add_edge("reason_node", "supervisor_node")
 workflow.add_edge("reroute_node", "supervisor_node")
 workflow.add_edge("coordination_node", "supervisor_node")

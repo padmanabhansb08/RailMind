@@ -686,7 +686,7 @@
       "task_description": "Inspect and test signaling points and local circuits at New Delhi station immediately.",
       "urgency": "high",
       "action_required": "Dispatch repair team immediately",
-      "status": "pending",
+      "status": "resolved",
       "timestamp": "2026-06-14 11:48:41.851522"
     },
     {

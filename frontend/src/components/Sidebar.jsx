@@ -1,8 +1,12 @@
 /* eslint-disable */
 import React from 'react';
-import { LayoutDashboard, Map, BellRing, ClipboardList, BarChart3, HelpCircle, FileClock, Sliders } from 'lucide-react';
+import { LayoutDashboard, Map, BellRing, ClipboardList, BarChart3, FileClock, Sliders } from 'lucide-react';
+import { statusMeta, useSystemStatus, StatusDot } from '../systemStatus';
 
 export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
+  const { status, reachable } = useSystemStatus(15000);
+  const overall = reachable ? (status?.overall || 'unknown') : 'unknown';
+  const overallMeta = statusMeta(overall);
   const menuItems = [
     { id: 'Dashboard', name: 'Overview', icon: LayoutDashboard },
     { id: 'Live Map', name: 'Real-Time Map', icon: Map },
@@ -13,7 +17,6 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
   ];
 
   const bottomItems = [
-    { id: 'Support', name: 'Help & Support', icon: HelpCircle },
     { id: 'Logs', name: 'System Events', icon: FileClock }
   ];
 
@@ -33,7 +36,13 @@ export default function Sidebar({ activeTab = 'Dashboard', setActiveTab }) {
         {/* Header */}
         <div style={{ padding: '0 24px 24px 24px', borderBottom: '1px solid var(--border-color)' }}>
           <h2 style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0.5px' }}>Workspace</h2>
-          <span style={{ fontSize: '11px', color: 'var(--color-resolved)', fontWeight: 500 }}>System Active</span>
+          <span
+            title={reachable ? undefined : 'Cannot reach the RailMind API'}
+            style={{ fontSize: '11px', color: overallMeta.color, fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <StatusDot status={overall} />
+            {overall === 'ok' ? 'All systems operational' : `System ${overallMeta.label.toLowerCase()}`}
+          </span>
         </div>
 
         {/* Navigation */}

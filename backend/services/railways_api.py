@@ -15,6 +15,62 @@ BASE_URL = "http://indianrailapi.com/api/v2"
 
 SIMULATED_OVERRIDES = {}
 
+# --- Feed telemetry -------------------------------------------------------
+# Which source actually served each train lookup. The upstream providers fail
+# silently into a mock generator, so without this the dashboard cannot tell
+# live telemetry apart from simulated positions — they arrive in the same shape.
+from collections import deque
+# Aliased because this module rebinds the bare name `datetime` to the module
+# further down, which would otherwise break the timestamp below at call time.
+from datetime import datetime as _dt
+
+LIVE_SOURCES = {"ntes", "rapidapi", "indianrail", "railradar", "db_realtime"}
+
+FEED_STATS = {
+    "recent": deque(maxlen=50),   # source name per lookup, newest last
+    "last_attempt_at": None,
+    "last_success_at": None,
+    "last_error": None,
+}
+
+
+def record_feed_result(source: str, error: str = None):
+    now = _dt.now().isoformat()
+    FEED_STATS["recent"].append(source)
+    FEED_STATS["last_attempt_at"] = now
+    if source in LIVE_SOURCES:
+        FEED_STATS["last_success_at"] = now
+    if error:
+        FEED_STATS["last_error"] = error[:200]
+
+
+def tagged(source: str, data):
+    """Record which source served a lookup and stamp it on the result.
+
+    Downstream code needs to tell a real GPS fix from an interpolated one:
+    they are the same shape, and treating them alike is how a live train ends
+    up plotted hundreds of kilometres from where it is.
+    """
+    record_feed_result(source)
+    if isinstance(data, dict):
+        return {**data, "position_source": "live" if source in LIVE_SOURCES else "simulated"}
+    return data
+
+
+def feed_summary():
+    """Live-vs-simulated breakdown of recent train lookups."""
+    recent = list(FEED_STATS["recent"])
+    live = sum(1 for s in recent if s in LIVE_SOURCES)
+    return {
+        "attempts": len(recent),
+        "live": live,
+        "simulated": len(recent) - live,
+        "sources": {s: recent.count(s) for s in set(recent)},
+        "last_attempt_at": FEED_STATS["last_attempt_at"],
+        "last_success_at": FEED_STATS["last_success_at"],
+        "last_error": FEED_STATS["last_error"],
+    }
+
 STATION_COORDS = {
     # North India
     "NDLS": {"lat": 28.6419, "lng": 77.2194, "name": "New Delhi"},
@@ -610,6 +666,61 @@ def _get_schedule_progress(train_number: str) -> float:
     return progress
 
 
+# A train is called "at" a station only within this radius; beyond it, it is
+# genuinely between two stations and saying otherwise misplaces it.
+AT_STATION_RADIUS_KM = 5.0
+
+
+def km_between(lat1, lng1, lat2, lng2):
+    """Rough great-circle distance, good enough for station proximity."""
+    if None in (lat1, lng1, lat2, lng2):
+        return None
+    return math.sqrt(((lat2 - lat1) * 111.0) ** 2 + ((lng2 - lng1) * 91.0) ** 2)
+
+
+def describe_position(lat, lng, last_name, next_name,
+                      last_lat=None, last_lng=None, next_lat=None, next_lng=None):
+    """Describe where a train actually is, as a segment rather than a point.
+
+    A single station name cannot honestly express a moving train's position.
+    Reporting `current_station` for a train 171 km past Kanpur Central put it
+    on screen as though it were sitting in the platform there. When the train
+    is not near either endpoint, the truthful answer names both.
+
+    Returns the fields to merge onto a train record.
+    """
+    to_last = km_between(lat, lng, last_lat, last_lng)
+    to_next = km_between(lat, lng, next_lat, next_lng)
+
+    at = None
+    if to_last is not None and to_last <= AT_STATION_RADIUS_KM:
+        at = last_name
+    elif to_next is not None and to_next <= AT_STATION_RADIUS_KM:
+        at = next_name
+
+    if at:
+        label = f"At {at}"
+    elif last_name and next_name:
+        label = f"Between {last_name} and {next_name}"
+        if to_next is not None:
+            label += f" — {round(to_next)} km to {next_name}"
+    elif next_name:
+        label = f"Approaching {next_name}"
+    elif last_name:
+        label = f"Departed {last_name}"
+    else:
+        label = "Position unknown"
+
+    return {
+        "last_station": last_name,
+        "next_station": next_name,
+        "at_station": at,
+        "between_stations": at is None,
+        "km_to_next": None if to_next is None else round(to_next, 1),
+        "position_label": label,
+    }
+
+
 def get_dynamic_position_and_status(train_number: str) -> dict:
     base = RAW_MOCK_TRAINS.get(train_number)
     if not base:
@@ -743,13 +854,20 @@ def get_dynamic_position_and_status(train_number: str) -> dict:
         "status": status,
         "platform": str((hash_val % 4) + 1),
         "passenger_load": passenger_load,
+        # `current_station` is retained for existing callers, but it means
+        # "last station departed" — see position_label for the honest answer.
         "current_station": current_station,
         "next_station": next_station,
         "distance_next": distance_next,
         "speed": speed,
         "lat": lat,
         "lng": lng,
-        "route_stops": route_stops_coords
+        "route_stops": route_stops_coords,
+        **describe_position(
+            lat, lng, current_station, next_station,
+            coord_from.get("lat"), coord_from.get("lng"),
+            coord_to.get("lat"), coord_to.get("lng"),
+        ),
     }
 
 def mock_train_data() -> list:
@@ -898,9 +1016,15 @@ async def _get_live_train_status_impl(train_number: str) -> dict:
     if train_number in _live_status_cache:
         cached = _live_status_cache[train_number]
         if now - cached["timestamp"] < CACHE_TTL:
-            # Re-apply dynamic map movement to cached data so it keeps moving
             data = cached["data"].copy() if isinstance(cached["data"], dict) else cached["data"]
-            if isinstance(data, dict) and "lat" in data:
+            # Advance simulated positions so mock trains keep moving between
+            # fetches — but never for a record that came from a real feed.
+            # Doing so overwrote a live GPS fix with an interpolated one while
+            # keeping the live station name, so a train reported as being at
+            # KOSI KALAN in Uttar Pradesh plotted in Gujarat, ~700 km away.
+            if (isinstance(data, dict)
+                    and data.get("position_source") == "simulated"
+                    and "lat" in data):
                 dynamic = get_dynamic_position_and_status(train_number)
                 data["lat"] = dynamic.get("lat", data["lat"])
                 data["lng"] = dynamic.get("lng", data["lng"])
@@ -933,9 +1057,10 @@ async def _fetch_live_train_status_impl(train_number: str) -> dict:
             if response.status_code == 200:
                 data = response.json()
                 if data and (data.get("trainNo") or data.get("runs") or data.get("data")):
-                    return parse_ntes_train_for_agent(data, train_number)
+                    return tagged("ntes", parse_ntes_train_for_agent(data, train_number))
     except Exception as e:
         print(f"[RAILMIND] NTES API error for {train_number}: {e}")
+        FEED_STATS["last_error"] = f"NTES: {e}"[:200]
 
     if RAPIDAPI_KEY and RAPIDAPI_KEY not in ["", "your_key_here", "mock_key"]:
         url = f"https://{RAPIDAPI_HOST}/api/v1/liveTrainStatus"
@@ -950,9 +1075,10 @@ async def _fetch_live_train_status_impl(train_number: str) -> dict:
                 if response.status_code == 200:
                     data = response.json()
                     if data.get("status") is True:
-                        return parse_rapidapi_train_for_agent(data, train_number)
+                        return tagged("rapidapi", parse_rapidapi_train_for_agent(data, train_number))
         except Exception as e:
             print(f"[RAILMIND] RapidAPI error for {train_number}: {e}")
+            FEED_STATS["last_error"] = f"RapidAPI: {e}"[:200]
 
     # Fallback to IndianRailAPI
     if RAILWAYS_API_KEY and RAILWAYS_API_KEY not in ["", "your_key_here", "mock_key"]:
@@ -963,14 +1089,15 @@ async def _fetch_live_train_status_impl(train_number: str) -> dict:
                 response = await client.get(url)
                 data = response.json()
                 if data.get("ResponseCode") == "200":
-                    return parse_train_for_agent(data, train_number)
+                    return tagged("indianrail", parse_train_for_agent(data, train_number))
         except Exception as e:
             print(f"[RAILMIND] IndianRailAPI error for {train_number}: {e}")
+            FEED_STATS["last_error"] = f"IndianRailAPI: {e}"[:200]
 
     # Fallback to DB API journeys for live real-time simulation if all IR sources are unconfigured/mocked
     db_data = await get_db_realtime_data(train_number)
     if db_data:
-        return db_data
+        return tagged("db_realtime", db_data)
 
     # Fallback to the real RailRadar live map data we just integrated
     radar_data = await fetch_all_live_trains()
@@ -979,28 +1106,58 @@ async def _fetch_live_train_status_impl(train_number: str) -> dict:
             if t.get("train_number") == train_number:
                 # Return the true live coordinates instead of New Delhi mock
                 delay = t.get("departure_minutes") or t.get("next_arrival_minutes") or 0
-                return {
+                return tagged("railradar", {
                     "train_number": train_number,
                     "train_name": t.get("train_name", "Unknown Train"),
                     "delay_minutes": delay,
                     "passenger_load": "medium" if delay <= 15 else "high",
                     "status": "delayed" if delay > 15 else "on_time",
-                    "current_station": t.get("next_station_name") or t.get("current_station_name") or "Unknown",
-                    "station_code": t.get("next_station") or t.get("current_station") or "UNK",
-                    "lat": t.get("current_lat") or t.get("next_lat"),
-                    "lng": t.get("current_lng") or t.get("next_lng"),
+                    # Name, code and coordinates must all describe the SAME
+                    # station. This used to label the train with its *next*
+                    # stop while plotting its *current* position, so the popup
+                    # and the marker disagreed about where the train was.
+                    "current_station": t.get("current_station_name") or t.get("next_station_name") or "Unknown",
+                    "station_code": t.get("current_station") or t.get("next_station") or "UNK",
+                    "lat": t.get("current_lat") if t.get("current_lat") is not None else t.get("next_lat"),
+                    "lng": t.get("current_lng") if t.get("current_lng") is not None else t.get("next_lng"),
+                    "next_station": t.get("next_station_name"),
+                    **describe_position(
+                        t.get("current_lat") if t.get("current_lat") is not None else t.get("next_lat"),
+                        t.get("current_lng") if t.get("current_lng") is not None else t.get("next_lng"),
+                        t.get("current_station_name"), t.get("next_station_name"),
+                        t.get("current_lat"), t.get("current_lng"),
+                        t.get("next_lat"), t.get("next_lng"),
+                    ),
                     "schedule_arrival": "-",
                     "actual_arrival": "-",
                     "source": "Unknown",
                     "destination": "Unknown",
-                    "route_stops": []
-                }
+                    # The live feed knows the current stop and the next one and
+                    # nothing further, so that single segment is the only route
+                    # we can draw truthfully. Anything longer would be invented.
+                    "route_stops": [
+                        s for s in (
+                            {"code": t.get("current_station"),
+                             "name": t.get("current_station_name"),
+                             "lat": t.get("current_lat"), "lng": t.get("current_lng")},
+                            {"code": t.get("next_station"),
+                             "name": t.get("next_station_name"),
+                             "lat": t.get("next_lat"), "lng": t.get("next_lng")},
+                        ) if s["lat"] is not None and s["lng"] is not None
+                    ],
+                    "route_is_partial": True,
+                })
 
-    # Final fallback to mock data
+    # Final fallback: a simulated stand-in exists only for the curated demo
+    # fleet. For any other number we return nothing.
+    #
+    # This previously synthesised a train for whatever string it was handed —
+    # searching "abcdef" produced "Express abcdef" running New Delhi to Howrah,
+    # with coordinates that advanced on every call. A service that does not
+    # exist must never appear on an operations map.
     if train_number in RAW_MOCK_TRAINS:
-        return get_dynamic_position_and_status(train_number)
-    mock_data = get_mock_rapidapi_train(train_number)
-    return parse_rapidapi_train_for_agent(mock_data, train_number)
+        return tagged("mock", get_dynamic_position_and_status(train_number))
+    return None
 
 async def get_live_train_status(train_number: str) -> dict:
     res = await _get_live_train_status_impl(train_number)
@@ -1136,10 +1293,28 @@ class RailwaysAPIClient:
     async def get_multiple_trains(self, train_numbers: list) -> list:
         return await get_multiple_trains(train_numbers)
 
+# The ~2,700-train snapshot is one upstream call serving many lookups, so it is
+# cached here rather than at each call site. Without this, a single agent cycle
+# fetched it once per tracked train — 15 downloads every few seconds — which
+# exhausted the RailRadar rate limit and made operator searches fail.
+_LIVE_MAP_SNAPSHOT = {"data": [], "timestamp": 0.0}
+LIVE_MAP_SNAPSHOT_TTL = 60
+
+
 async def fetch_all_live_trains() -> list:
     """Fetches the live map snapshot of all trains from the RailRadar API"""
+    from .railradar import api_key, is_configured
+
+    now = time.time()
+    if _LIVE_MAP_SNAPSHOT["data"] and now - _LIVE_MAP_SNAPSHOT["timestamp"] < LIVE_MAP_SNAPSHOT_TTL:
+        return _LIVE_MAP_SNAPSHOT["data"]
+
+    if not is_configured():
+        print("[RAILMIND] RAILRADAR_API_KEY not configured — live map snapshot unavailable")
+        return []
+
     url = "https://api.railradar.in/v1/legacy/trains/live-map"
-    headers = {"Authorization": "Bearer rg_955e151f5aa84f6ebe1c70f9c36ecb33"}
+    headers = {"Authorization": f"Bearer {api_key()}"}
     try:
         async with httpx.AsyncClient(timeout=15) as client:
             response = await client.get(url, headers=headers)

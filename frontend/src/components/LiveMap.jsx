@@ -190,6 +190,24 @@ const createShockwaveIcon = (severity) => {
   });
 };
 
+// ─── Component: Fly to a searched train ──────────────────────────────────────
+// Searching added the train to the map but never moved the map to it, so a
+// result outside the current viewport looked like the search had failed.
+function FocusTrain({ train }) {
+  const map = useMap();
+  const lastFocused = useRef(null);
+
+  useEffect(() => {
+    if (!train || train.lat == null || train.lng == null) return;
+    const key = `${train.train_number}:${train.lat},${train.lng}`;
+    if (lastFocused.current === key) return;
+    lastFocused.current = key;
+    map.flyTo([train.lat, train.lng], Math.max(map.getZoom(), 8), { duration: 1.2 });
+  }, [train, map]);
+
+  return null;
+}
+
 // ─── Component: Animated Polyline (flowing dashes) ───────────────────────────
 function AnimatedPolyline({ positions, color = '#cbd5e1', weight = 3, isDashed = false }) {
   const map = useMap();
@@ -252,7 +270,7 @@ function ToastOverlay({ toasts }) {
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export default function LiveMap({ trains = [], incidents = [] }) {
+export default function LiveMap({ trains = [], incidents = [], focusTrainNumber = null }) {
   const [selectedTrainNo, setSelectedTrainNo] = useState(null);
   const [backgroundSwarm, setBackgroundSwarm] = useState([]);
   const [toasts, setToasts] = useState([]);
@@ -279,7 +297,13 @@ export default function LiveMap({ trains = [], incidents = [] }) {
             isDelayed: (t.departure_minutes > 15 || t.next_arrival_minutes > 15),
             name: t.train_name
           })).filter(t => t.lat && t.lng && t.lat > 5 && t.lat < 40 && t.lng > 65 && t.lng < 100); // Strict India Bounding Box
-          setBackgroundSwarm(parsed);
+
+          // RailRadar returns one row per running journey, so the same train
+          // number arrives several times. Keep one dot per train — otherwise
+          // the map stacks duplicates on top of each other and React sees
+          // repeated keys.
+          const deduped = [...new Map(parsed.map(t => [t.id, t])).values()];
+          setBackgroundSwarm(deduped);
         }
       } catch (err) {
         console.error("Failed to fetch massive train grid", err);
@@ -390,6 +414,7 @@ export default function LiveMap({ trains = [], incidents = [] }) {
       <LiveClockBadge />
 
       <MapContainer center={MAP_CENTER} zoom={6} zoomControl={false} style={{ width: '100%', height: '100%' }}>
+        <FocusTrain train={activeTrains.find(t => t.train_number === focusTrainNumber)} />
         <TileLayer
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
@@ -430,8 +455,18 @@ export default function LiveMap({ trains = [], incidents = [] }) {
                 <AnimatedPolyline positions={detourCoords} color="#ff3366" weight={4} isDashed={true} />
               </>
             ) : (
+              // Drawn as a calm dashed connector, never an animated flow.
+              // These are straight lines between station coordinates, not
+              // track alignment — no source here carries rail geometry — and
+              // dashes racing along a 700 km leg read as a train tearing
+              // across country. Animation is reserved for an approved detour,
+              // where the motion marks an operator decision rather than
+              // implying the line is a real corridor.
               originalCoords.length > 1 && (
-                <AnimatedPolyline positions={originalCoords} color="#00f0ff" weight={3} />
+                <Polyline
+                  positions={originalCoords}
+                  pathOptions={{ color: '#00f0ff', weight: 2.5, opacity: 0.75, dashArray: '6, 7' }}
+                />
               )
             )}
           </>
@@ -475,7 +510,7 @@ export default function LiveMap({ trains = [], incidents = [] }) {
 
           return (
             <Marker
-              key={train.train_number || idx}
+              key={`${train.train_number || 'unknown'}-${idx}`}
               position={position}
               icon={createMarkerIcon(train.status?.toLowerCase(), delay, isSelected)}
               eventHandlers={{ click: () => setSelectedTrainNo(prev => prev === train.train_number ? null : train.train_number) }}
@@ -504,9 +539,25 @@ export default function LiveMap({ trains = [], incidents = [] }) {
                     {train.train_name || 'Express Train'}
                   </h3>
 
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '10px', color: '#8a9ba8', marginBottom: '10px' }}>
-                    <span>⚡ {train.speed || '80 km/h'}</span>
-                    <span>📍 {train.current_station || '—'}</span>
+                  {/* position_label names both endpoints when the train is
+                      between stations; falling back to current_station alone
+                      would place a moving train at a platform it has passed.
+                      Speed shows "—" when unknown rather than a stock figure. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '10px', color: '#8a9ba8', marginBottom: '10px' }}>
+                    <span>📍 {train.position_label || train.current_station || '—'}</span>
+                    <span style={{ color: '#64748b' }}>
+                      {train.route_is_partial
+                        ? 'route: current segment only — straight line between stops, not track alignment'
+                        : 'route: straight lines between stops, not track alignment'}
+                    </span>
+                    <span style={{ display: 'flex', gap: '10px' }}>
+                      <span>⚡ {train.speed || '—'}</span>
+                      {train.position_source && (
+                        <span style={{ color: train.position_source === 'live' ? '#10b981' : '#f59e0b' }}>
+                          {train.position_source === 'live' ? 'live position' : 'simulated position'}
+                        </span>
+                      )}
+                    </span>
                   </div>
 
                   {hasApprovedDetour && (

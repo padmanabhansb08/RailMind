@@ -1,8 +1,8 @@
 /* eslint-disable */
 import React, { useState, useEffect } from 'react';
-import { Bell, Settings } from 'lucide-react';
+import { Bell } from 'lucide-react';
 
-export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'connected', onNotificationsClick, onSettingsClick, onProfileClick, activeTab = 'Dashboard', onTabChange, liveFlash = false, cycleCountdown = 30, onSearch }) {
+export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'connected', onNotificationsClick, activeTab = 'Dashboard', onTabChange, liveFlash = false, onSearch, searchError = null, onDismissSearchError }) {
   const tabs = ['Rail Network', 'Sensor Data', 'Timetable', 'Fleet'];
   const [searchValue, setSearchValue] = useState("");
   // Keep tab mapping aligned with App.jsx
@@ -73,11 +73,13 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
               if (e.key === 'Enter' && onSearch) {
                 onSearch(searchValue);
                 setSearchValue('');
+              } else if (searchError && onDismissSearchError) {
+                onDismissSearchError();
               }
             }}
             style={{
               backgroundColor: 'var(--bg-main)',
-              border: '1px solid var(--border-color)',
+              border: `1px solid ${searchError ? '#ef4444' : 'var(--border-color)'}`,
               borderRadius: '8px',
               color: 'var(--text-primary)',
               padding: '8px 12px 8px 32px',
@@ -101,6 +103,28 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
+
+          {/* A search that finds nothing must say so — the alternative used to
+              be a fabricated train, and before that, silence. */}
+          {searchError && (
+            <div style={{
+              position: 'absolute',
+              top: '40px',
+              right: 0,
+              minWidth: '240px',
+              backgroundColor: '#1a1113',
+              border: '1px solid #ef4444',
+              borderRadius: '8px',
+              padding: '10px 12px',
+              fontSize: '11px',
+              color: '#fca5a5',
+              lineHeight: 1.5,
+              zIndex: 2000,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.5)'
+            }}>
+              {searchError}
+            </div>
+          )}
         </div>
 
         {/* Live and Counts indicators box */}
@@ -130,7 +154,10 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
               fontWeight: 600, 
               color: isConnected ? 'var(--color-resolved)' : 'var(--color-critical)'
             }}>
-              {isConnected ? 'System Online' : 'System Offline'}
+              {/* Names what it actually measures: the WebSocket link to the
+                  backend. Overall subsystem health is the sidebar's badge, and
+                  labelling both "System …" made them look contradictory. */}
+              {isConnected ? 'Live feed connected' : 'Live feed lost'}
             </span>
           </div>
           
@@ -150,18 +177,6 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
             <span style={{ fontSize: '15px', fontWeight: 700, color: 'var(--color-critical)' }}>{incidentCount}</span>
           </div>
 
-          <div style={{ width: '1px', height: '14px', backgroundColor: 'var(--border-color)' }}></div>
-
-          {/* Next agent cycle countdown */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', padding: '0 4px' }}>
-            <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)' }}>Next Cycle</span>
-            <span style={{ 
-              fontSize: '15px', 
-              fontWeight: 700, 
-              color: cycleCountdown <= 5 ? 'var(--color-critical)' : 'var(--color-warning)',
-              transition: 'color 0.3s'
-            }}>{cycleCountdown}s</span>
-          </div>
         </div>
 
         {/* Bell notification */}
@@ -192,41 +207,6 @@ export default function TopBar({ loopCount = 0, incidentCount = 0, wsStatus = 'c
               borderRadius: '50%'
             }} />
           )}
-        </div>
-
-        {/* Settings */}
-        <button 
-          onClick={onSettingsClick}
-          style={{
-            backgroundColor: 'transparent',
-            border: 'none',
-            color: '#cbd5e1',
-            cursor: 'pointer',
-            padding: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.2s'
-          }} onMouseEnter={(e) => e.currentTarget.style.color = '#ffffff'} onMouseLeave={(e) => e.currentTarget.style.color = '#cbd5e1'}>
-          <Settings size={18} />
-        </button>
-
-        {/* Profile Avatar */}
-        <div 
-          onClick={onProfileClick}
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '4px',
-            overflow: 'hidden',
-            border: '1px solid #2b3240',
-            cursor: 'pointer'
-          }}>
-          <img 
-            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80" 
-            alt="User profile" 
-            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '4px' }}
-          />
         </div>
 
       </div>

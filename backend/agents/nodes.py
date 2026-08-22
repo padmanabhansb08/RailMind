@@ -69,11 +69,17 @@ async def evaluate_previous_action(state: AgentState) -> AgentState:
             import time
             start_time = time.time()
             client = railways_client
-            print(f"[RAILMIND] Pre-ingesting Railways API for {len(TRACKED_TRAINS)} trains...")
-            results = await client.get_multiple_trains(TRACKED_TRAINS)
-            
+            # Poll the trains this run is actually about. Previously this always
+            # used TRACKED_TRAINS (populated only by operator searches), and
+            # because it writes raw_train_data, ingest_node then reused that set
+            # instead of polling target_trains — so a train injected from the
+            # simulation portal was never fetched and never detected.
+            train_numbers = state.get("target_trains") or TRACKED_TRAINS
+            print(f"[RAILMIND] Pre-ingesting Railways API for {len(train_numbers)} trains...")
+            results = await client.get_multiple_trains(train_numbers)
+
             train_results = []
-            for tn in TRACKED_TRAINS:
+            for tn in train_numbers:
                 found = False
                 for r in results:
                     if r.get("train_number") == tn:
@@ -1214,8 +1220,15 @@ async def report_node(state: AgentState) -> AgentState:
                 pass
             worst_case = f"If unresolved: {at_risk_count} more trains will be delayed by {future_time}"
         
+        # An operator-injected delay is not live telemetry. Flag it so the
+        # decision queue can say so on the card instead of presenting a
+        # simulated figure as an observed one.
+        from ..services.railways_api import SIMULATED_OVERRIDES
+        is_simulated = str(train_number) in SIMULATED_OVERRIDES
+
         incident_report = {
             "incident_id": incident_id,
+            "simulated": is_simulated,
             "loop_created": state.get("loop_count", 0),
             "timestamp": datetime.utcnow().isoformat(),
             "train_number": train_number,
