@@ -79,6 +79,36 @@ function MainApp() {
   const [focusTrainNumber, setFocusTrainNumber] = useState(null);
   const [searchError, setSearchError] = useState(null);
 
+  // Resizable Panel States
+  const [panelHeight, setPanelHeight] = useState(240);
+  const dragRef = useRef({ isDragging: false, startY: 0, startHeight: 0 });
+
+  const handleMouseDown = (e) => {
+    dragRef.current = { isDragging: true, startY: e.clientY, startHeight: panelHeight };
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleMouseMove = (e) => {
+    if (!dragRef.current.isDragging) return;
+    const dy = e.clientY - dragRef.current.startY;
+    const newHeight = dragRef.current.startHeight - dy;
+    setPanelHeight(Math.max(100, Math.min(newHeight, window.innerHeight - 200)));
+  };
+
+  const handleMouseUp = () => {
+    dragRef.current.isDragging = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+  };
+
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, []);
+
   const recentIncidentElements = useMemo(() => {
     const result = [];
     const len = Math.min(incidents.length, 5);
@@ -823,10 +853,25 @@ function MainApp() {
             overflow: 'hidden',
             backgroundColor: '#05070a'
           }}>
-            <div style={{ flex: 1, position: 'relative', borderBottom: '1px solid var(--border-color)' }}>
+            <div style={{ flex: 1, position: 'relative' }}>
               <LiveMap trains={trains} incidents={incidents} focusTrainNumber={focusTrainNumber} />
             </div>
-            <div style={{ height: '340px', flexShrink: 0 }}>
+            
+            {/* Draggable Handle */}
+            <div 
+              onMouseDown={handleMouseDown}
+              style={{ 
+                height: '4px', 
+                backgroundColor: 'var(--border-color)', 
+                cursor: 'ns-resize',
+                zIndex: 10,
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = '#64748b'}
+              onMouseLeave={(e) => e.target.style.backgroundColor = 'var(--border-color)'}
+            />
+
+            <div style={{ height: `${panelHeight}px`, flexShrink: 0 }}>
               <TaskBoard tasks={tasks} onResolve={handleResolve} />
             </div>
           </div>
